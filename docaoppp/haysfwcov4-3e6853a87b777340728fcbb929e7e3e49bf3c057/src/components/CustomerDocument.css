@@ -1,0 +1,205 @@
+.customer-document-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: #f6f7f9;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  outline: none;
+}
+.customer-document-header {
+  background: white;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.customer-document-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.customer-document-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #526071;
+}
+.customer-document-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.customer-document-body.with-fields {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.customer-document-preview {
+  overflow: auto;
+  padding: 12px;
+  min-width: 0;
+}
+.document-caption {
+  font-size: 12px;
+  color: #526071;
+  margin: 0 0 8px;
+}
+.document-preview {
+  min-width: 0;
+}
+.document-page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.document-canvas {
+  position: relative;
+  background: white;
+  margin: 0 auto;
+  box-shadow: 0 1px 8px rgb(0 0 0 / 12%);
+}
+.document-canvas canvas {
+  display: block;
+}
+.document-field-target {
+  position: absolute;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0;
+  cursor: text;
+}
+.document-field-target:hover,
+.document-field-target:focus-visible {
+  background: rgb(220 38 38 / 10%);
+  border-color: var(--red);
+}
+.document-inline-editor {
+  position: absolute;
+  z-index: 2;
+  width: min(280px, 100%);
+  padding: 12px;
+  background: white;
+  border: 2px solid var(--red);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+}
+.document-inline-editor > .icon-button {
+  float: right;
+}
+.customer-document-fields {
+  overflow: auto;
+  background: white;
+  padding: 18px;
+  border-left: 1px solid var(--border);
+}
+.customer-document-fields h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+.customer-document-fields fieldset {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.customer-document-editor .field {
+  min-width: 0;
+}
+.customer-document-editor input,
+.customer-document-editor textarea,
+.customer-document-editor select {
+  min-width: 0;
+  max-width: 100%;
+}
+.customer-document-editor select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: white;
+  color: #17202e;
+}
+.customer-document-footer {
+  background: white;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  max-height: 35dvh;
+  overflow: auto;
+}
+.customer-document-footer .notice {
+  margin: 8px 0;
+}
+.customer-document-totals {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.document-success {
+  color: #1f7a45;
+  margin: 8px 0;
+}
+.customer-document-card {
+  padding: 20px;
+  margin: 16px 0;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.customer-document-card .button-row,
+.customer-document-footer .button-row {
+  flex-wrap: wrap;
+}
+.customer-document-header > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.customer-document-card h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+.customer-document-card p {
+  font-size: 13px;
+  color: #526071;
+}
+@media (max-width: 760px) {
+  .customer-document-header {
+    padding: 12px;
+  }
+  .customer-document-header h2 {
+    font-size: 16px;
+  }
+  .customer-document-header .button {
+    padding: 8px;
+  }
+  .customer-document-body.with-fields {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr);
+  }
+  .customer-document-fields {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 12px;
+  }
+  .customer-document-footer {
+    padding: 12px;
+  }
+  .customer-document-footer .button-row {
+    gap: 8px;
+  }
+  .customer-document-footer .button {
+    flex: 1 1 140px;
+    min-height: 42px;
+  }
+}

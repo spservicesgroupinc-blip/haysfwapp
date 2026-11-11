@@ -1,0 +1,436 @@
+
+function disableRegistration() {
+  PropertiesService.getScriptProperties().setProperty(PROP.REGISTRATION_MODE, 'off');
+  Logger.log('Registration is now OFF.');
+}
+
+function useInviteCode(code) {
+  if (!code || String(code).length < DEFAULTS.MIN_REGISTRATION_CODE_LENGTH) {
+    throw new Error('Invite code must be at least ' + DEFAULTS.MIN_REGISTRATION_CODE_LENGTH + ' characters.');
+  }
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty(PROP.REGISTRATION_MODE, 'invite');
+  props.setProperty(PROP.REGISTRATION_CODE, String(code));
+  Logger.log('Registration set to INVITE with code.');
+}
+
+function createUser(email, name, password, role) {
+  ensureDatabaseReady_();
+  if (!email || !password) throw appError_('bad_request', 'Email and password are required.');
+  email = String(email).trim().toLowerCase();
+  role = role || 'editor';
+
+  if (ROLE_VALUES.indexOf(role) === -1) {
+    throw appError_('invalid_role', 'Role must be one of: ' + ROLE_VALUES.join(', '));
+  }
+  if (String(password).length < DEFAULTS.MIN_PASSWORD_LENGTH) {
+    throw appError_('weak_password', 'Password must be at least ' + DEFAULTS.MIN_PASSWORD_LENGTH + ' characters.');
+  }
+
+  var sheet = usersSheet_();
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === email) {
+      throw appError_('user_exists', 'A user with this email already exists.');
+    }
+  }
+
+  var salt = generateSalt_();
+  var hash = hashPassword_(password, salt);
+  var now = new Date().toISOString();
+
+  sheet.appendRow([
+    email,
+    name || email,
+    role,
+    salt,
+    hash,
+    true, // Active
+    0,    // FailedAttempts
+    '',   // LockedUntil
+    now,  // CreatedAt
+    ''    // LastLoginAt
+  ]);
+
+  appendLog_('SYSTEM', 'USER_CREATED', '', '', 'Created account for ' + email + ' (' + role + ')');
+  return { email: email, name: name || email, role: role };
+}
+
+function removeUser_(email) {
+  var sheet = usersSheet_();
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === String(email).toLowerCase()) {
+      sheet.deleteRow(i + 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function listUsers() {
+  var sheet = usersSheet_();
+  var data = sheet.getDataRange().getValues();
+  var users = [];
+  for (var i = 1; i < data.length; i++) {
+    users.push({
+      email: data[i][0],
+      name: data[i][1],
+      role: data[i][2],
+      active: data[i][5],
+      createdAt: data[i][8],
+      lastLoginAt: data[i][9]
+    });
+  }
+  Logger.log(JSON.stringify(users, null, 2));
+  return users;
+}
+
+function loginUser_(email, password) {
+  ensureDatabaseReady_();
+  if (!email || !password) throw appError_('bad_request', 'Email and password are required.');
+  email = String(email).trim().toLowerCase();
+
+  var sheet = usersSheet_();
+  var data = sheet.getDataRange().getValues();
+  var rowIndex = -1;
+  var row = null;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === email) {
+      rowIndex = i + 1;
+      row = data[i];
+      break;
+    }
+  }
+
+  if (!row) throw appError_('invalid_credentials', 'Incorrect email or password.');
+
+  var name = row[1];
+  var role = row[2];
+  var salt = row[3];
+  var expectedHash = row[4];
+  var active = row[5];
+  var failedAttempts = Number(row[6]) || 0;
+  var lockedUntilStr = row[7];
+
+  if (!active) throw appError_('account_disabled', 'This account has been disabled.');
+
+  var now = new Date();
+  if (lockedUntilStr) {
+    var lockedUntil = new Date(lockedUntilStr);
+    if (now < lockedUntil) {
+      var minutesLeft = Math.ceil((lockedUntil.getTime() - now.getTime()) / 60000);
+      throw appError_('account_locked', 'Account locked due to failed attempts. Try again in ' + minutesLeft + ' minute(s).');
+    }
+  }
+
+  var candidateHash = hashPassword_(password, salt);
+  if (candidateHash !== expectedHash) {
+    failedAttempts++;
+    var updateRange = sheet.getRange(rowIndex, 7, 1, 2);
+    if (failedAttempts >= DEFAULTS.MAX_FAILED_ATTEMPTS) {
+      var lockExpires = new Date(now.getTime() + DEFAULTS.LOCKOUT_MINUTES * 60 * 1000);
+      updateRange.setValues([[failedAttempts, lockExpires.toISOString()]]);
+      appendLog_(email, 'LOGIN_LOCKED', '', '', 'Locked out after ' + failedAttempts + ' failed attempts');
+      throw appError_('account_locked', 'Too many failed attempts. Account locked for ' + DEFAULTS.LOCKOUT_MINUTES + ' minutes.');
+    } else {
+      updateRange.setValues([[failedAttempts, '']]);
+      appendLog_(email, 'LOGIN_FAILED', '', '', 'Failed login attempt (' + failedAttempts + ')');
+      throw appError_('invalid_credentials', 'Incorrect email or password.');
+    }
+  }
+
+  // Login successful: reset attempts and record timestamp
+  sheet.getRange(rowIndex, 7, 1, 4).setValues([[0, '', row[8], now.toISOString()]]);
+
+  var session = createSession_(email, name, role);
+  appendLog_(email, 'LOGIN_SUCCESS', '', '', 'Session started');
+
+  return {
+    sessionToken: session.token,
+    expiresAt: session.expiresAt,
+    user: { email: email, name: name, role: role }
+  };
+}
+
+function registerUser_(email, name, password, inviteCode) {
+  var mode = registrationMode_();
+  if (mode === 'off') {
+    throw appError_('registration_closed', 'Self-service registration is currently disabled.');
+  }
+
+  if (mode === 'invite') {
+    var requiredCode = PropertiesService.getScriptProperties().getProperty(PROP.REGISTRATION_CODE);
+    if (!requiredCode || String(inviteCode).trim() !== requiredCode.trim()) {
+      throw appError_('invalid_invite_code', 'Invalid or missing registration invite code.');
+    }
+  }
+
+  var allowedDomains = PropertiesService.getScriptProperties().getProperty(PROP.REGISTRATION_EMAIL_DOMAINS);
+  if (allowedDomains) {
+    var domains = allowedDomains.split(',').map(function (d) { return d.trim().toLowerCase(); });
+    var emailDomain = String(email).split('@')[1] || '';
+    if (domains.indexOf(emailDomain.toLowerCase()) === -1) {
+      throw appError_('domain_not_allowed', 'Email domain is not authorized for registration.');
+    }
+  }
+
+  var defaultRole = selfRegistrationRole_();
+  var user = createUser(email, name, password, defaultRole);
+  var session = createSession_(user.email, user.name, user.role);
+
+  appendLog_(user.email, 'REGISTRATION_SUCCESS', '', '', 'User registered via ' + mode + ' mode');
+
+  return {
+    sessionToken: session.token,
+    expiresAt: session.expiresAt,
+    user: user
+  };
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. JOB DATA LAYER
+ * ------------------------------------------------------------------------ */
+
+function emptyRecordTemplate_() {
+  return {
+    recordId: '',
+    jobNumber: '',
+    jobName: '',
+    customerName: '',
+    email: '',
+    mobilePhone: '',
+    lossAddress: '',
+    carrier: '',
+    claimNumber: '',
+    status: 'Draft',
+    insurance: { roughEstimateAmount: '' },
+    financials: {
+      totalApprovedRcv: '',
+      deductible: '',
+      netClaimValue: 0,
+      downPayment: 0,
+      midProgressPayment: 0,
+      balancePayment: 0,
+      commenceDays: 10,
+      completeDays: 60
+    },
+    mortgage: { hasMortgage: false },
+    changeOrder: {
+      originalContractSum: '',
+      netPreviousChanges: '',
+      changeAmount: '',
+      addedDays: '',
+      changeType: 'increase',
+      isInsuranceRelated: false
+    },
+    checklist: {
+      depreciationAmount: '',
+      isSelfPay: false,
+      isProgramClaim: false,
+      hasCheckBeenSent: false,
+      isDepreciationWithheld: false,
+      hasDeductibleBeenCollected: 'No'
+    },
+    productionNotes: { notes: '' }
+  };
+}
+
+function saveJob_(user, jobData) {
+  return withWriteLock_(function () { return saveJobUnlocked_(user, jobData); });
+}
+
+/** Serialize writes across devices and flush before releasing the lock. */
+function withWriteLock_(operation) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw appError_('busy', 'The database is busy. Your changes will retry automatically.');
+  try {
+    var result = operation();
+    SpreadsheetApp.flush();
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function saveJobUnlocked_(user, jobData) {
+  if (user.role === 'viewer') {
+    throw appError_('forbidden', 'Viewer role does not have permission to save or update jobs.');
+  }
+  if (!jobData || typeof jobData !== 'object') {
+    throw appError_('bad_request', 'Job record payload is missing or invalid.');
+  }
+
+  var sheet = jobsSheet_();
+  var recordId = jobData.recordId || jobData.RecordId || Utilities.getUuid();
+  jobData.recordId = recordId;
+
+  var nowIso = new Date().toISOString();
+  var todayStr = nowIso.slice(0, 10);
+
+  // Look up existing row
+  var data = sheet.getDataRange().getValues();
+  var targetRow = -1;
+  var existingCreatedAt = todayStr;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(recordId)) {
+      targetRow = i + 1;
+      existingCreatedAt = data[i][10] || todayStr;
+      break;
+    }
+  }
+
+  // Guard against exceeding the 50,000-character Google Sheets cell limit.
+  // Long free-text fields (Production Notes, Loss Description, etc.) can push
+  // the serialized record past it, which would fail the whole save.
+  var recordJson = JSON.stringify(jobData);
+  if (recordJson.length > 49000) {
+    throw appError_(
+      'record_too_large',
+      'Job record is ' + recordJson.length + ' characters, over the 50,000-character storage limit. Shorten the Production Notes or other long text fields.'
+    );
+  }
+
+  var rowValues = [
+    recordId,
+    (jobData.customer || {}).jobNumber || jobData.jobNumber || jobData.JobNumber || '',
+    (jobData.customer || {}).jobName || jobData.jobName || jobData.JobName || '',
+    (jobData.customer || {}).customerName || jobData.customerName || jobData.CustomerName || '',
+    (jobData.customer || {}).email || jobData.email || jobData.Email || '',
+    (jobData.customer || {}).mobilePhone || jobData.mobilePhone || jobData.MobilePhone || '',
+    (jobData.customer || {}).lossAddress || jobData.lossAddress || jobData.LossAddress || '',
+    (jobData.insurance || {}).carrier || jobData.carrier || jobData.Carrier || '',
+    (jobData.insurance || {}).claimNumber || jobData.claimNumber || jobData.ClaimNumber || '',
+    jobData.status || jobData.Status || 'Draft',
+    targetRow !== -1 ? existingCreatedAt : todayStr,
+    nowIso,
+    user.email,
+    currentSchemaVersion_(),
+    recordJson,
+    false // Deleted
+  ];
+
+  if (targetRow !== -1) {
+    var changedSections = [];
+    try {
+      var previousJob = JSON.parse(data[targetRow - 1][14]);
+      ['customer', 'insurance', 'financials', 'team', 'mortgage', 'productionNotes', 'checklist', 'changeOrder'].forEach(function (section) {
+        if (JSON.stringify(previousJob[section]) !== JSON.stringify(jobData[section])) changedSections.push(section);
+      });
+    } catch (ignored) { changedSections = ['job details']; }
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+    appendLog_(user.email, 'JOB_UPDATED', recordId, rowValues[1], 'Job updated' + (changedSections.length ? ': ' + changedSections.join(', ') : ''));
+  } else {
+    sheet.appendRow(rowValues);
+    appendLog_(user.email, 'JOB_CREATED', recordId, rowValues[1], 'New job record added');
+  }
+
+  return jobData;
+}
+
+function getJob_(user, recordId) {
+  if (!recordId) throw appError_('bad_request', 'recordId is required.');
+  var sheet = jobsSheet_();
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(recordId)) {
+      var isDeleted = data[i][15] === true || String(data[i][15]).toUpperCase() === 'TRUE';
+      if (isDeleted) throw appError_('not_found', 'Job record has been deleted.');
+
+      var jsonStr = data[i][14];
+      try {
+        return JSON.parse(jsonStr);
+      } catch (err) {
+        throw appError_('data_corrupt', 'Stored JSON could not be parsed: ' + err);
+      }
+    }
+  }
+  throw appError_('not_found', 'Job record not found.');
+}
+
+function listJobs_(user, options) {
+  options = options || {};
+  var sheet = jobsSheet_();
+  var data = sheet.getDataRange().getValues();
+  var jobs = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var isDeleted = data[i][15] === true || String(data[i][15]).toUpperCase() === 'TRUE';
+    if (isDeleted && !options.includeDeleted) continue;
+
+    var recordId = data[i][0];
+    if (!recordId) continue;
+
+    var item = {
+      recordId: recordId,
+      jobNumber: data[i][1],
+      jobName: data[i][2],
+      customerName: data[i][3],
+      email: data[i][4],
+      mobilePhone: data[i][5],
+      lossAddress: data[i][6],
+      carrier: data[i][7],
+      claimNumber: data[i][8],
+      status: data[i][9],
+      createdAt: data[i][10],
+      updatedAt: data[i][11],
+      updatedBy: data[i][12],
+      deleted: isDeleted
+    };
+
+    if (options.fullRecords) {
+      try {
+        item.record = JSON.parse(data[i][14]);
+      } catch (e) {
+        item.record = null;
+      }
+    }
+    jobs.push(item);
+  }
+  return jobs;
+}
+
+function deleteJob_(user, recordId) {
+  return withWriteLock_(function () { return deleteJobUnlocked_(user, recordId); });
+}
+
+function deleteJobUnlocked_(user, recordId) {
+  if (user.role === 'viewer') {
+    throw appError_('forbidden', 'Viewer role cannot delete jobs.');
+  }
+  if (!recordId) throw appError_('bad_request', 'recordId is required.');
+
+  var sheet = jobsSheet_();
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(recordId)) {
+      sheet.getRange(i + 1, 12).setValue(new Date().toISOString()); // UpdatedAt
+      sheet.getRange(i + 1, 13).setValue(user.email);             // UpdatedBy
+      sheet.getRange(i + 1, 16).setValue(true);                   // Deleted
+      appendLog_(user.email, 'JOB_DELETED', recordId, String(data[i][1]), 'Job soft-deleted');
+      return { recordId: recordId, deleted: true };
+    }
+  }
+  throw appError_('not_found', 'Job record not found.');
+}
+
+/* ---------------------------------------------------------------------------
+ * 7B. SHARED WORKSPACE DRAFT
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Stores the record currently open in the workspace.
+ *
+ * The draft is deliberately shared by the whole team: a single row keyed on
+ * 'current'. It exists so that in-progress work is never stranded on one device
+ * (the previous behaviour kept it in the browser only). Whoever autosaves last
+ * wins, and whoever opens the app next picks it up - including on a brand new
+ * machine or under a different account.
+ */
+function saveDraft_(user, draft) {
+  return withWriteLock_(function () { return saveDraftUnlocked_(user, draft); });
+}

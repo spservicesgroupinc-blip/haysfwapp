@@ -1,0 +1,264 @@
+
+function saveDraftUnlocked_(user, draft) {
+  if (user.role === 'viewer') {
+    throw appError_('forbidden', 'Viewer role does not have permission to save the workspace draft.');
+  }
+  if (!draft || typeof draft !== 'object' || !draft.job || typeof draft.job !== 'object') {
+    throw appError_('bad_request', 'Draft payload is missing or invalid.');
+  }
+
+  // Guard against the 50,000-character Google Sheets cell limit, same as saveJob_.
+  var payloadJson = JSON.stringify(draft.job);
+  if (payloadJson.length > 49000) {
+    throw appError_(
+      'record_too_large',
+      'The draft is ' + payloadJson.length + ' characters, over the 50,000-character storage limit. Shorten the Production Notes or other long text fields.'
+    );
+  }
+
+  var job = draft.job;
+  var nowIso = new Date().toISOString();
+  var recordId = String(draft.recordId || job.recordId || '');
+  var customer = job.customer && typeof job.customer === 'object' ? job.customer : {};
+  var rowValues = [
+    DRAFT_ROW_ID,
+    nowIso,
+    user.email,
+    recordId,
+    String(job.jobNumber || customer.jobNumber || ''),
+    String(job.customerName || customer.customerName || ''),
+    currentSchemaVersion_(),
+    payloadJson
+  ];
+
+  var sheet = draftsSheet_();
+  var data = sheet.getDataRange().getValues();
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === DRAFT_ROW_ID) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow !== -1) {
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
+
+  return {
+    draftId: DRAFT_ROW_ID,
+    updatedAt: nowIso,
+    updatedBy: user.email,
+    recordId: recordId,
+    job: job
+  };
+}
+
+/** Returns the shared workspace draft, or null when the workspace is empty. */
+function getDraft_(user) {
+  var sheet = draftsSheet_();
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== DRAFT_ROW_ID) continue;
+
+    var payloadJson = data[i][7];
+    if (!payloadJson) return null;
+
+    var job = null;
+    try {
+      job = JSON.parse(payloadJson);
+    } catch (err) {
+      throw appError_('data_corrupt', 'The stored draft could not be parsed: ' + err);
+    }
+    if (!job) return null;
+
+    return {
+      draftId: DRAFT_ROW_ID,
+      updatedAt: data[i][1] ? String(data[i][1]) : '',
+      updatedBy: data[i][2] ? String(data[i][2]) : '',
+      recordId: data[i][3] ? String(data[i][3]) : '',
+      job: job
+    };
+  }
+
+  return null;
+}
+
+/* ---------------------------------------------------------------------------
+ * 8. AUDIT LOGGING & UTILITIES
+ * ------------------------------------------------------------------------ */
+
+function appendLog_(userEmail, action, recordId, jobNumber, detail) {
+  try {
+    var sheet = logSheet_();
+    if (!sheet) return;
+    sheet.appendRow([
+      new Date().toISOString(),
+      userEmail || 'ANONYMOUS',
+      action || '',
+      recordId || '',
+      jobNumber || '',
+      detail || ''
+    ]);
+  } catch (err) {
+    Logger.log('Audit log failure: ' + err);
+  }
+}
+
+function currentSchemaVersion_() {
+  var props = PropertiesService.getScriptProperties();
+  return Number(props.getProperty(PROP.SCHEMA_VERSION)) || DEFAULTS.SCHEMA_VERSION;
+}
+
+/* ---------------------------------------------------------------------------
+ * 9. SELF TEST & DIAGNOSTICS
+ * ------------------------------------------------------------------------ */
+
+function selfTest() {
+  Logger.log('Starting Self-Test verification...');
+  ensureDatabaseReady_();
+
+  var testEmail = 'selftest.' + new Date().getTime() + '@example.com';
+  var testPass = 'SelfTestPass123!';
+
+  // 1. Create User
+  var user = createUser(testEmail, 'Self-Test Operator', testPass, 'editor');
+  if (!user || user.email !== testEmail) throw new Error('SelfTest: Failed to create user.');
+
+  // 2. Login
+  var loginResult = loginUser_(testEmail, testPass);
+  if (!loginResult.sessionToken) throw new Error('SelfTest: Login did not return sessionToken.');
+
+  // 3. Save Job
+  var template = emptyRecordTemplate_();
+  template.jobNumber = 'TEST-001';
+  template.jobName = 'Self-Test Drying Phase';
+  template.customerName = 'Test Property';
+  template.status = 'Draft';
+
+  var saved = saveJob_(loginResult.user, template);
+  if (!saved.recordId) throw new Error('SelfTest: Job save failed to produce recordId.');
+
+  // 4. Retrieve Job
+  var fetched = getJob_(loginResult.user, saved.recordId);
+  if (fetched.jobName !== 'Self-Test Drying Phase') throw new Error('SelfTest: Fetched job mismatch.');
+
+  // 5. Delete Job
+  var deleted = deleteJob_(loginResult.user, saved.recordId);
+  if (!deleted.deleted) throw new Error('SelfTest: Job deletion failed.');
+
+  // 6. Shared workspace draft round trip
+  saveDraft_(loginResult.user, { job: template, recordId: saved.recordId });
+  var draft = getDraft_(loginResult.user);
+  if (!draft || !draft.job) throw new Error('SelfTest: Draft save failed.');
+  if (draft.updatedBy !== testEmail) throw new Error('SelfTest: Draft updatedBy mismatch.');
+  if (draft.job.jobName !== 'Self-Test Drying Phase') throw new Error('SelfTest: Draft payload mismatch.');
+  if (!draftsSheet_()) throw new Error('SelfTest: Drafts sheet is missing.');
+
+  // 7. Cleanup. Remove the self-test draft row, but never a real one: the
+  //    draft only goes if this test wrote it.
+  var draftCleanupSheet = draftsSheet_();
+  var draftRows = draftCleanupSheet.getDataRange().getValues();
+  for (var dr = draftRows.length - 1; dr >= 1; dr--) {
+    if (String(draftRows[dr][0]) === DRAFT_ROW_ID && String(draftRows[dr][2]) === testEmail) {
+      draftCleanupSheet.deleteRow(dr + 1);
+    }
+  }
+
+  removeUser_(testEmail);
+  cleanupSessions();
+
+  Logger.log('=============================');
+  Logger.log('>>> SELF TEST RESULT: PASS <<<');
+  Logger.log('=============================');
+  return 'PASS';
+}
+
+/* Customer job workspace. Each accepted revision is one append containing both
+ * state and its activity/operation receipt. A lost response is safe to retry;
+ * there is no multi-sheet commit gap between a mutation and its receipt. */
+var WORKSPACE_SHEETS = { workItem: 'WorkItems', comment: 'WorkComments', changeOrder: 'ChangeOrders', contract: 'ContractSettings' };
+var WORKSPACE_HEADERS = ['Id', 'RecordId', 'Revision', 'OperationId', 'RequestJson', 'EntityJson', 'ActivityJson'];
+
+function workspaceRows_(kind, create) {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(WORKSPACE_SHEETS[kind]);
+  if (!sheet && create) {
+    sheet = ss.insertSheet(WORKSPACE_SHEETS[kind]);
+    sheet.appendRow(WORKSPACE_HEADERS);
+  }
+  return { sheet: sheet, rows: sheet ? sheet.getDataRange().getValues().slice(1) : [] };
+}
+
+function workspaceEntities_(recordId) {
+  var latest = {};
+  Object.keys(WORKSPACE_SHEETS).forEach(function (kind) {
+    workspaceRows_(kind, false).rows.forEach(function (row) {
+      if (String(row[1]) === recordId) latest[kind + ':' + row[0]] = JSON.parse(row[5]);
+    });
+  });
+  return Object.keys(latest).map(function (key) { return latest[key]; });
+}
+
+function workspaceStaff_() {
+  return usersSheet_().getDataRange().getValues().slice(1).filter(function (row) {
+    return row[5] === true || String(row[5]).toLowerCase() === 'true';
+  }).map(function (row) { return { email: String(row[0]).toLowerCase(), name: String(row[1] || row[0]) }; });
+}
+
+function getJobWorkspace_(user, payload) {
+  var recordId = workspaceId_(payload.recordId);
+  getJob_(user, recordId); // Includes deleted-job check.
+  var entities = workspaceEntities_(recordId).sort(function (a, b) { return a.id.localeCompare(b.id); });
+  var activity = [];
+  Object.keys(WORKSPACE_SHEETS).forEach(function (kind) {
+    workspaceRows_(kind, false).rows.forEach(function (row) {
+      if (String(row[1]) === recordId) activity.push(JSON.parse(row[6]));
+    });
+  });
+  var audit = getSpreadsheet_().getSheetByName(PropertiesService.getScriptProperties().getProperty(PROP.LOG_SHEET_NAME) || DEFAULTS.LOG_SHEET_NAME);
+  if (audit) audit.getDataRange().getValues().slice(1).forEach(function (row, index) {
+    if (String(row[3]) === recordId && /^JOB_/.test(String(row[2]))) {
+      activity.push({ id: 'job-audit-' + index, at: new Date(row[0]).toISOString(), actor: String(row[1]), detail: String(row[5] || row[2]) });
+    }
+  });
+  activity.sort(function (a, b) { return b.at.localeCompare(a.at) || a.id.localeCompare(b.id); });
+  var size = Math.max(1, Math.min(100, Math.floor(Number(payload.pageSize) || 100)));
+  var page = Math.max(1, Math.floor(Number(payload.page) || 1));
+  var offset = (page - 1) * size;
+  return { entities: entities.slice(offset, offset + size), activity: activity.slice(offset, offset + size),
+    totalEntities: entities.length, totalActivity: activity.length, fetchedAt: new Date().toISOString() };
+}
+
+function workspaceId_(value) {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{1,120}$/.test(value)) throw appError_('bad_request', 'Invalid workspace identifier.');
+  return value;
+}
+function workspaceText_(value, max, label, required) {
+  var text = value == null ? '' : String(value).trim();
+  if ((required && !text) || text.length > max) throw appError_('bad_request', label + ' is required and must be at most ' + max + ' characters.');
+  return text;
+}
+function workspaceChoice_(value, choices, label) {
+  if (choices.indexOf(value) === -1) throw appError_('bad_request', 'Invalid ' + label + '.');
+  return value;
+}
+function workspaceMoney_(value, allowNegative) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || Math.abs(value) > 1e14 || (!allowNegative && value < 0)) {
+    throw appError_('bad_request', 'Invalid money amount in cents.');
+  }
+  return value;
+}
+function workspaceDate_(value, required) {
+  var text = workspaceText_(value, 10, 'Date', required);
+  if (text && (!/^\d{4}-\d{2}-\d{2}$/.test(text) || isNaN(Date.parse(text)) || new Date(text).toISOString().slice(0, 10) !== text)) {
+    throw appError_('bad_request', 'Invalid date.');
+  }
+  return text;
+}
+function workspaceDelta_(d) {
+  return d.changeType === 'increase' ? d.amountCents : d.changeType === 'decrease' ? -d.amountCents : 0;
+}

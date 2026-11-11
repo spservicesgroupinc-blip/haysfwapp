@@ -1,0 +1,143 @@
+Source: C:\Users\russe\haysdocuments-2\src\App.tsx
+
+App.tsx lines 567-676: record updates and regeneration
+
+  /** Debounced live regeneration after a click-to-edit change in the preview. */
+  const regeneratePreview = (doc: JobDocument, data: RestorationJobData) => {
+    if (previewRegenTimerRef.current !== null) {
+      window.clearTimeout(previewRegenTimerRef.current);
+    }
+    previewRegenTimerRef.current = window.setTimeout(async () => {
+      setIsPreviewRegenerating(true);
+      try {
+        const { bytes, spans } = await generateDocWithSpans(doc.generator, data);
+        setPreviewBytes(bytes);
+        setPreviewSpans(spans);
+      } catch (err: any) {
+        console.error('Failed regenerating preview:', err);
+        showStatus('error', 'Error refreshing PDF preview');
+      } finally {
+        setIsPreviewRegenerating(false);
+      }
+    }, 300);
+  };
+
+  // Fields whose PDF editor widgets commit 'Yes'/'No' instead of raw booleans.
+  const BOOLEAN_PDF_FIELDS = new Set<string>([
+    'mortgage.hasMortgage',
+    'changeOrder.isInsuranceRelated',
+    'checklist.isSelfPay',
+    'checklist.isProgramClaim',
+    'checklist.hasCheckBeenSent',
+    'checklist.isDepreciationWithheld',
+  ]);
+
+  // Fields stored as number | '' that the PDF editor edits as free text.
+  const NUMERIC_PDF_FIELDS = new Set<string>([
+    'changeOrder.originalContractSum',
+    'changeOrder.netPreviousChanges',
+    'changeOrder.changeAmount',
+    'changeOrder.addedDays',
+    'checklist.depreciationAmount',
+  ]);
+
+  const coercePdfFieldValue = (field: string, value: string): string | number | boolean => {
+    if (BOOLEAN_PDF_FIELDS.has(field)) {
+      const lower = value.toLowerCase();
+      return lower === 'yes' ? true : lower === 'no' ? false : value;
+    }
+    if (NUMERIC_PDF_FIELDS.has(field)) {
+      if (value === '') return '';
+      const n = Number(value);
+      return Number.isNaN(n) ? '' : n;
+    }
+    return value;
+  };
+
+  /** Routes an edit from the click-to-edit PDF preview into the job record. */
+  const handlePdfFieldChange = (field: string, value: string) => {
+    const dot = field.indexOf('.');
+    if (dot === -1) return;
+    const section = field.slice(0, dot);
+    const fieldName = field.slice(dot + 1);
+
+    const current = jobDataRef.current;
+    let next: RestorationJobData;
+
+    if (section === 'financials') {
+      if (fieldName === 'totalApprovedRcv' || fieldName === 'deductible') {
+        const num = value === '' ? '' : Number(value);
+        const parsed = typeof num === 'number' && !Number.isNaN(num) ? num : '';
+        next = computeFinancialRecord(
+          current,
+          fieldName === 'totalApprovedRcv' ? parsed : current.financials.totalApprovedRcv,
+          fieldName === 'deductible' ? parsed : current.financials.deductible
+        );
+      } else {
+        // commenceDays / completeDays are day counts.
+        next = {
+          ...current,
+          financials: {
+            ...current.financials,
+            [fieldName]: value === '' ? 0 : Number(value) || 0,
+          },
+        };
+      }
+    } else if (section === 'branch') {
+      next = { ...current, branch: { ...current.branch, [fieldName]: value } };
+    } else if (
+      section === 'customer' ||
+      section === 'insurance' ||
+      section === 'team' ||
+      section === 'mortgage' ||
+      section === 'changeOrder' ||
+      section === 'checklist' ||
+      section === 'productionNotes'
+    ) {
+      const nextRaw: any = { ...current };
+      nextRaw[section] = {
+        ...(current as any)[section],
+        [fieldName]: coercePdfFieldValue(field, value),
+      };
+      next = nextRaw as RestorationJobData;
+    } else {
+      return;
+    }
+
+    jobDataRef.current = next;
+    setJobData(next);
+
+    if (previewDoc) {
+      regeneratePreview(previewDoc, next);
+    }
+  };
+
+
+
+App.tsx lines 1072-1096: preview props
+
+      <PdfPreviewModal
+        isOpen={isPreviewOpen}
+        title={previewTitle}
+        pdfBytes={previewBytes}
+        isLoading={isPreviewLoading}
+        isRegenerating={isPreviewRegenerating}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setPreviewBytes(null);
+          setPreviewDoc(null);
+          setPreviewSpans([]);
+          if (previewRegenTimerRef.current !== null) {
+            window.clearTimeout(previewRegenTimerRef.current);
+            previewRegenTimerRef.current = null;
+          }
+        }}
+        onDownload={handlePreviewDownload}
+        jobData={jobData}
+        editableFields={previewDoc ? getPdfFieldSchema(previewDoc.id) : []}
+        spans={previewSpans}
+        onFieldChange={handlePdfFieldChange}
+        onSaveToDrive={previewDoc ? handleSaveDocToDrive : undefined}
+        isDriveLoading={isDriveLoading}
+        driveSuccessLink={driveSuccessLink}
+      />

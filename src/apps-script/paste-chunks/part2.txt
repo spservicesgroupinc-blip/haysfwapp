@@ -1,0 +1,433 @@
+
+function writeNotesTab_(spreadsheet, jobSheetName, logSheetName, usersSheetName, sessionsSheetName, draftsSheetName) {
+  var sheet = spreadsheet.getSheetByName(DEFAULTS.NOTES_SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(DEFAULTS.NOTES_SHEET_NAME);
+  sheet.clear();
+
+  var lines = [
+    ['Hays + Sons Complete Restoration - Customer & Job Database'],
+    ['Provisioned', new Date().toISOString()],
+    ['Schema version', String(currentSchemaVersion_())],
+    [''],
+    ['HOW THIS WORKS'],
+    ['This spreadsheet is the system of record for customer/job data entered in the document automation app.'],
+    ['The front-end talks to the Apps Script web app, which reads and writes the "' + jobSheetName + '" sheet.'],
+    ['Every change is also appended to "' + logSheetName + '".'],
+    [''],
+    ['SHEETS'],
+    [jobSheetName, 'One row per saved job. RecordJson holds the complete record.'],
+    [logSheetName, 'Append-only audit trail of who changed what and when.'],
+    [usersSheetName, 'Application accounts. Salt and PasswordHash are hidden.'],
+    [sessionsSheetName, 'Active login sessions. The Token column is hidden.'],
+    [
+      draftsSheetName,
+      'The shared workspace draft - the record currently being edited. PayloadJson is hidden. One row, so nothing is lost if a device is replaced.'
+    ],
+    [''],
+    ['SIGNING IN'],
+    ['The app has its own login page. Credentials are checked against the "' + usersSheetName + '" sheet.'],
+    ['Passwords are never stored in plain text - each account has a random salt and an iterated hash.'],
+    ['Create accounts from the Apps Script editor with createUser(email, name, password, role).'],
+    ['People can also create their own account from the login page. See REGISTRATION_MODE below.'],
+    ['Sessions expire after ' + DEFAULTS.SESSION_HOURS + ' hours and are listed in "' + sessionsSheetName + '".'],
+    [''],
+    ['COLUMNS - ' + jobSheetName]
+  ];
+
+  for (var i = 0; i < JOB_HEADERS.length; i++) {
+    lines.push(['  ' + (i + 1) + '. ' + JOB_HEADERS[i], describeColumn_(JOB_HEADERS[i])]);
+  }
+
+  lines.push(['']);
+  lines.push(['COLUMNS - ' + logSheetName]);
+  for (var l = 0; l < LOG_HEADERS.length; l++) {
+    lines.push(['  ' + (l + 1) + '. ' + LOG_HEADERS[l], '']);
+  }
+
+  lines.push(['']);
+  lines.push(['COLUMNS - ' + draftsSheetName]);
+  for (var d = 0; d < DRAFT_HEADERS.length; d++) {
+    lines.push(['  ' + (d + 1) + '. ' + DRAFT_HEADERS[d], '']);
+  }
+  lines.push(['']);
+  lines.push(['DRAFTING']);
+  lines.push([
+    'Shared draft',
+    'The app autosaves the record being edited into ' + draftsSheetName + ', so a browser reset, a new device or a different login never loses in-progress work.'
+  ]);
+  lines.push(['Saved jobs', 'Clicking Save Job promotes the workspace draft into the ' + jobSheetName + ' sheet (the system of record).']);
+
+  lines.push(['']);
+  lines.push(['SECURITY - do not weaken these in production']);
+  lines.push(['Sessions', 'Bearer tokens issued by login; expire after ' + DEFAULTS.SESSION_HOURS + ' hours.']);
+  lines.push([
+    'Lockout',
+    'An account locks for ' + DEFAULTS.LOCKOUT_MINUTES + ' minutes after ' + DEFAULTS.MAX_FAILED_ATTEMPTS + ' failed attempts.'
+  ]);
+  lines.push(['ALLOWED_CLIENT_ID', 'Optional Google ID-token path (legacy).']);
+  lines.push(['ALLOWED_EMAILS', 'Optional Google ID-token path (legacy).']);
+  lines.push(['SHARED_SECRET', 'DEVELOPER BYPASS ONLY - leave blank in production.']);
+  lines.push(['REGISTRATION_MODE', describeRegistrationMode_()]);
+
+  var width = 2;
+  sheet.getRange(1, 1, lines.length, width).setValues(
+    lines.map(function (row) {
+      var padded = row.slice(0, width);
+      while (padded.length < width) padded.push('');
+      return padded;
+    })
+  );
+
+  sheet.getRange(1, 1, 1, width).setFontWeight('bold').setFontSize(14);
+  sheet.setColumnWidth(1, 320);
+  sheet.setColumnWidth(2, 520);
+  sheet.getRange(4, 1, lines.length - 3, width).setWrap(true).setVerticalAlignment('top');
+}
+
+function describeColumn_(name) {
+  var map = {
+    RecordId: 'Immutable UUID. Primary key. Never edited.',
+    JobNumber: 'Human-facing job number, e.g. FW-2026-0842.',
+    JobName: 'Job / project name.',
+    CustomerName: 'Property owner.',
+    Email: 'Customer email.',
+    MobilePhone: 'Best contact number.',
+    LossAddress: 'Property where the loss occurred.',
+    Carrier: 'Insurance carrier.',
+    ClaimNumber: 'Carrier claim number.',
+    Status: 'Draft | Active | On Hold | Complete | Cancelled.',
+    CreatedAt: 'YYYY-MM-DD when the job was first created.',
+    UpdatedAt: 'ISO timestamp of the last save.',
+    UpdatedBy: 'Verified email of the last editor.',
+    SchemaVersion: 'Record schema version for future migrations.',
+    RecordJson: 'Complete record as JSON. Source of truth for reload.',
+    Deleted: 'TRUE for soft-deleted rows.'
+  };
+  return map[name] || '';
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. MENU & ACCESSORS
+ * ------------------------------------------------------------------------ */
+
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('Hays + Sons DB')
+      .addItem('Set up / repair database', 'setupDatabase')
+      .addItem('Run self test', 'selfTest')
+      .addItem('Turn ON self-service sign-up', 'enableRegistration')
+      .addItem('Turn OFF self-service sign-up', 'disableRegistration')
+      .addItem('List users', 'listUsers')
+      .addItem('Clean up expired sessions', 'cleanupSessions')
+      .addItem('Sign out everyone', 'revokeAllSessions')
+      .addItem('Show install info', 'showInstallInfo')
+      .addToUi();
+  } catch (err) {
+    // Standalone scripts have no UI; this is normal.
+  }
+}
+
+function getSpreadsheet_() {
+  var id = PropertiesService.getScriptProperties().getProperty(PROP.DB_SPREADSHEET_ID);
+  if (!id) {
+    ensureDatabaseReady_();
+    id = PropertiesService.getScriptProperties().getProperty(PROP.DB_SPREADSHEET_ID);
+  }
+  return SpreadsheetApp.openById(id);
+}
+
+function jobsSheet_() {
+  var ss = getSpreadsheet_();
+  var name = PropertiesService.getScriptProperties().getProperty(PROP.DB_SHEET_NAME) || DEFAULTS.DB_SHEET_NAME;
+  return ss.getSheetByName(name);
+}
+
+function usersSheet_() {
+  var ss = getSpreadsheet_();
+  var name = PropertiesService.getScriptProperties().getProperty(PROP.USERS_SHEET_NAME) || DEFAULTS.USERS_SHEET_NAME;
+  return ss.getSheetByName(name);
+}
+
+function sessionsSheet_() {
+  var ss = getSpreadsheet_();
+  var name = PropertiesService.getScriptProperties().getProperty(PROP.SESSIONS_SHEET_NAME) || DEFAULTS.SESSIONS_SHEET_NAME;
+  return ss.getSheetByName(name);
+}
+
+function logSheet_() {
+  var ss = getSpreadsheet_();
+  var name = PropertiesService.getScriptProperties().getProperty(PROP.LOG_SHEET_NAME) || DEFAULTS.LOG_SHEET_NAME;
+  return ss.getSheetByName(name);
+}
+
+/**
+ * The Drafts sheet, created on first use so a deployment that has not re-run
+ * setupDatabase() yet still stores the shared draft correctly.
+ */
+function draftsSheet_() {
+  var ss = getSpreadsheet_();
+  var props = PropertiesService.getScriptProperties();
+  var name = props.getProperty(PROP.DRAFTS_SHEET_NAME) || DEFAULTS.DRAFTS_SHEET_NAME;
+  var sheet = ss.getSheetByName(name);
+
+  if (!sheet) {
+    ensureSheet_(ss, name, DRAFT_HEADERS);
+    sheet = ss.getSheetByName(name);
+    applySheetFormatting_(sheet, DRAFT_HEADERS);
+    props.setProperty(PROP.DRAFTS_SHEET_NAME, name);
+    appendLog_('SYSTEM', 'DRAFT_SHEET_CREATED', '', '', 'Created sheet ' + name);
+  }
+  return sheet;
+}
+
+function showInstallInfo() {
+  var props = PropertiesService.getScriptProperties();
+
+  var userCount = 0;
+  var sessionCount = 0;
+  try {
+    userCount = countDataRows_(usersSheet_());
+  } catch (err) {
+    userCount = -1;
+  }
+  try {
+    sessionCount = countDataRows_(sessionsSheet_());
+  } catch (err) {
+    sessionCount = -1;
+  }
+
+  var info = {
+    spreadsheetId: props.getProperty(PROP.DB_SPREADSHEET_ID) || '(not set - run setupDatabase)',
+    schemaVersion: props.getProperty(PROP.SCHEMA_VERSION) || '(not set)',
+    jobsSheet: props.getProperty(PROP.DB_SHEET_NAME) || DEFAULTS.DB_SHEET_NAME,
+    logSheet: props.getProperty(PROP.LOG_SHEET_NAME) || DEFAULTS.LOG_SHEET_NAME,
+    usersSheet: props.getProperty(PROP.USERS_SHEET_NAME) || DEFAULTS.USERS_SHEET_NAME,
+    sessionsSheet: props.getProperty(PROP.SESSIONS_SHEET_NAME) || DEFAULTS.SESSIONS_SHEET_NAME,
+    userCount: userCount,
+    activeSessionCount: sessionCount,
+    sessionHours: DEFAULTS.SESSION_HOURS,
+    signedInAccounts: userCount === 0 ? '(none - run createUser to add the first account)' : userCount,
+    legacyIdTokenPathEnabled: props.getProperty(PROP.REQUIRE_ID_TOKEN) !== 'false',
+    allowedClientIdSet: !!props.getProperty(PROP.ALLOWED_CLIENT_ID),
+    allowedEmails: props.getProperty(PROP.ALLOWED_EMAILS) || '(not set)',
+    developerBypassEnabled: !!props.getProperty(PROP.SHARED_SECRET),
+    selfRegistrationMode: registrationMode_(),
+    selfRegistrationEnabled: registrationEnabled_(),
+    selfRegistrationRequiresCode: registrationRequiresCode_(),
+    selfRegistrationDomains: props.getProperty(PROP.REGISTRATION_EMAIL_DOMAINS) || '(any domain)',
+    selfRegistrationRole: registrationEnabled_() ? selfRegistrationRole_() : '(n/a)',
+    webAppUrl: ScriptApp.getService().getUrl() || '(not deployed)'
+  };
+  Logger.log(JSON.stringify(info, null, 2));
+  return info;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. WEB APP ENTRY POINTS
+ * ------------------------------------------------------------------------ */
+
+function doGet(e) {
+  try {
+    var payload = parseRequest_(e);
+    if (!payload.action) payload.action = 'ping';
+    return handleAction_(payload);
+  } catch (err) {
+    return errorResponse_(err);
+  }
+}
+
+function doPost(e) {
+  try {
+    var payload = parseRequest_(e);
+    return handleAction_(payload);
+  } catch (err) {
+    return errorResponse_(err);
+  }
+}
+
+function parseRequest_(e) {
+  if (!e) return {};
+  if (e.postData && e.postData.contents) {
+    try {
+      return JSON.parse(e.postData.contents);
+    } catch (err) {
+      return { action: 'raw', contents: e.postData.contents };
+    }
+  }
+  if (e.parameter) {
+    return e.parameter;
+  }
+  return {};
+}
+
+function handleAction_(payload) {
+  var action = payload.action;
+
+  // Unauthenticated routes
+  if (action === 'ping') {
+    return successResponse_({
+      status: 'ok', timestamp: new Date().toISOString(), backendVersion: BACKEND_VERSION,
+      capabilities: ['analyzeIntake', 'saveJob', 'saveDraft', 'jobWorkspace'],
+      aiConfigured: !!(PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY') || '').trim()
+    });
+  }
+  if (action === 'login') {
+    var loginResult = loginUser_(payload.email, payload.password);
+    return successResponse_(loginResult);
+  }
+  if (action === 'register') {
+    var regResult = registerUser_(payload.email, payload.name, payload.password, payload.inviteCode);
+    return successResponse_(regResult);
+  }
+
+  // Authenticated routes
+  var user = authenticateRequest_(payload);
+
+  if (action === 'getJobWorkspace') return successResponse_(getJobWorkspace_(user, payload));
+  if (action === 'mutateJobWorkspace') return successResponse_(mutateJobWorkspace_(user, payload));
+  if (action === 'listAssignableStaff') return successResponse_({ staff: workspaceStaff_() });
+
+  if (action === 'logout') {
+    revokeSession_(payload.sessionToken || payload.token);
+    return successResponse_({ loggedOut: true });
+  }
+  if (action === 'getCurrentUser' || action === 'checkSession') {
+    return successResponse_({ user: user });
+  }
+  if (action === 'listJobs') {
+    var jobs = listJobs_(user, payload);
+    return successResponse_(jobs);
+  }
+  if (action === 'getJob') {
+    var job = getJob_(user, payload.recordId);
+    return successResponse_(job);
+  }
+  if (action === 'saveJob') {
+    var savedJob = saveJob_(user, payload.job);
+    return successResponse_(savedJob);
+  }
+  if (action === 'deleteJob') {
+    var delResult = deleteJob_(user, payload.recordId);
+    return successResponse_(delResult);
+  }
+  if (action === 'saveDraft') {
+    var draftPayload = payload.draft || (payload.job ? payload : null);
+    return successResponse_(saveDraft_(user, draftPayload));
+  }
+  if (action === 'getDraft') {
+    return successResponse_({ draft: getDraft_(user) });
+  }
+  if (action === 'getCustomerReference') {
+    return successResponse_(getCustomerReference_());
+  }
+  if (action === 'replaceCustomerReference') {
+    return successResponse_(replaceCustomerReference_(user, payload));
+  }
+  if (action === 'analyzeIntake') {
+    return successResponse_(analyzeIntake_(payload));
+  }
+  if (action === 'listUsers') {
+    if (user.role !== 'admin') throw appError_('forbidden', 'Administrator rights required.');
+    return successResponse_(listUsers());
+  }
+
+  throw appError_('unknown_action', 'Unrecognized action: ' + action);
+}
+
+function successResponse_(data) {
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, data: data }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function errorResponse_(err) {
+  var code = (err && err.code) || 'server_error';
+  var message = (err && err.message) || String(err);
+  return ContentService.createTextOutput(JSON.stringify({ ok: false, error: message, code: code }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function appError_(code, message) {
+  var err = new Error(message || code);
+  err.code = code;
+  return err;
+}
+
+/* Shared CSV reference: one JSON record per cell prevents spreadsheet formulas.
+ * Metadata is JSON too. Each replacement overwrites all prior rows, including
+ * blank padding when the new list is shorter, in ONE locked setValues call.
+ * No raw CSV or previous customer snapshot is retained.
+ */
+function customerReferenceSheet_() {
+  var ss = getSpreadsheet_();
+  return ss.getSheetByName('CustomerReference') || ss.insertSheet('CustomerReference');
+}
+
+function getCustomerReference_() {
+  return withWriteLock_(function () {
+    var rows = customerReferenceSheet_().getDataRange().getValues();
+    var metadata = rows.length > 1 && rows[1][1] ? JSON.parse(String(rows[1][1])) : {};
+    var customers = [];
+    for (var i = 1; i < rows.length; i++) {
+      if (rows[i][0]) customers.push(JSON.parse(String(rows[i][0])));
+    }
+    return {
+      customers: customers,
+      fileName: metadata.fileName || '',
+      updatedAt: metadata.updatedAt || '',
+      updatedBy: metadata.updatedBy || ''
+      ,version: metadata.version || metadata.updatedAt || ''
+    };
+  });
+}
+
+function replaceCustomerReference_(user, payload) {
+  if (user.role !== 'admin' && user.role !== 'editor') {
+    throw appError_('forbidden', 'Your role does not have permission to replace the customer reference.');
+  }
+  var input = payload.customers;
+  if (!Array.isArray(input) || input.length < 1 || input.length > 5000) {
+    throw appError_('bad_request', 'Upload between 1 and 5000 customer records.');
+  }
+  if (typeof payload.fileName !== 'string' || !payload.fileName.trim() || payload.fileName.length > 300) {
+    throw appError_('bad_request', 'A valid CSV filename is required.');
+  }
+  var seen = Object.create(null);
+  var customers = input.map(function (item) {
+    if (!item || typeof item.customerName !== 'string' || typeof item.jobNumber !== 'string') {
+      throw appError_('bad_request', 'Customer name and job number are required.');
+    }
+    var name = item.customerName.trim(), number = item.jobNumber.trim(), price = item.contractPrice;
+    if (!name || name.length > 300 || !number || number.length > 100) {
+      throw appError_('bad_request', 'Invalid customer name or job number.');
+    }
+    if (price !== null && (typeof price !== 'number' || !isFinite(price) || price < 0 || price > 1e12 || Math.abs(price * 100 - Math.round(price * 100)) > 0.01)) {
+      throw appError_('bad_request', 'Invalid contract price.');
+    }
+    var key = number.toUpperCase();
+    if (seen[key]) throw appError_('bad_request', 'Duplicate job number: ' + number);
+    seen[key] = true;
+    var record = { customerName: name, jobNumber: number, contractPrice: price };
+    var limits = { jobAddress: 500, city: 100, state: 100, zip: 20 };
+    Object.keys(limits).forEach(function (field) {
+      if (item[field] !== undefined && typeof item[field] !== 'string') throw appError_('bad_request', 'Invalid address field.');
+      record[field] = (item[field] || '').trim();
+      if (record[field].length > limits[field]) throw appError_('bad_request', 'Address field is too long.');
+    });
+    return record;
+  });
+  assertCustomerListSize_(customers);
+  return withWriteLock_(function () {
+    var sheet = customerReferenceSheet_();
+    var metadata = { fileName: payload.fileName.trim(), updatedAt: new Date().toISOString(), updatedBy: user.email, version: Utilities.getUuid() };
+    var rows = [['CustomerJson', 'ImportJson']];
+    customers.forEach(function (customer, index) {
+      rows.push([JSON.stringify(customer), index === 0 ? JSON.stringify(metadata) : '']);
+    });
+    var rowCount = Math.max(rows.length, sheet.getLastRow());
+    while (rows.length < rowCount) rows.push(['', '']);
+    if (rowCount > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), rowCount - sheet.getMaxRows());
+    sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+    return { customers: customers, fileName: metadata.fileName, updatedAt: metadata.updatedAt, updatedBy: metadata.updatedBy, version: metadata.version };
+  });
+}

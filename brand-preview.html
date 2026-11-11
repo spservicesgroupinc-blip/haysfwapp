@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hays+Sons — brand preview</title>
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --brand: #dc2626;
+        --brand-hover: #b91c1c;
+        --ink: #1a1a1a;
+        --canvas: #f8fafc;
+        --surface: #ffffff;
+        --border: #e2e8f0;
+        --text: #0f172a;
+        --muted: #64748b;
+        --faint: #94a3b8;
+        --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --print: Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--ui);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+      /* ---------- page furniture ---------- */
+      .masthead { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+      .masthead h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+      .masthead p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+      .rule { height: 1px; background: var(--border); margin: 28px 0 8px; }
+
+      section { margin-top: 44px; }
+      section > h2 {
+        font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--faint); margin: 0 0 4px;
+      }
+      section > p.lede { margin: 0 0 18px; color: var(--muted); font-size: 13px; max-width: 76ch; }
+
+      .card {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      }
+      .card .cap {
+        padding: 10px 14px; border-bottom: 1px solid var(--border);
+        font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--faint);
+      }
+      .card .body { padding: 22px 20px; }
+      .grid { display: grid; gap: 16px; }
+      .g2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+      .g3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+      /* ---------- the mark ---------- */
+      .lockup { display: flex; align-items: center; gap: 12px; }
+      .lockup .name { font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+      .lockup .sub { color: var(--muted); font-size: 11px; letter-spacing: 0; margin-top: 3px; }
+      .lockup-mark { display: block; color: var(--ink); }
+      .dark { background: #0f172a; }
+      .dark .name { color: #fff; }
+      .dark .sub { color: var(--faint); }
+      .dark .lockup-mark { color: #ffffff; }
+
+      /* ---------- comparison panels ---------- */
+      .panel { padding: 24px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 148px; gap: 12px; }
+      .panel .tag {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+        padding: 3px 7px; border-radius: 5px;
+      }
+      .tag-old { background: #fee2e2; color: #991b1b; }
+      .tag-ref { background: #e0e7ff; color: #3730a3; }
+      .tag-new { background: #dcfce7; color: #166534; }
+      .strike { color: var(--faint); text-decoration: line-through; font-size: 12px; }
+
+      /* previous treatment: red rounded square + white "H+" */
+      .old-square {
+        width: 44px; height: 44px; border-radius: 10px; background: var(--brand);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-weight: 700; font-size: 17px; letter-spacing: -0.03em;
+      }
+
+      /* ---------- app mocks ---------- */
+      .appbar {
+        display: flex; align-items: center; justify-content: space-between; gap: 16px;
+        padding: 0 20px; height: 64px; background: rgba(255,255,255,.97);
+        border-bottom: 1px solid var(--border);
+      }
+      .btn {
+        display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+        border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid var(--border);
+        background: #fff; color: #334155;
+      }
+      .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 11px;
+        border: 1px solid var(--border); border-radius: 8px; background: #f8fafc;
+        font-size: 12.5px; color: var(--text); white-space: nowrap;
+      }
+      .dot { width: 6px; height: 6px; border-radius: 99px; background: #10b981; }
+
+      .login { display: flex; flex-direction: column; align-items: center; padding: 34px 20px 30px; }
+      .login .sub { margin-top: 11px; font-size: 13px; color: var(--muted); }
+      .login .field {
+        margin-top: 18px; width: 100%; max-width: 300px; height: 40px; border-radius: 8px;
+        border: 1px solid var(--border); background: #fff;
+      }
+
+      /* ---------- PDF mock (1px == 1pt, US Letter 612 x 792) ---------- */
+      .page-holder { padding: 24px; display: flex; justify-content: center; }
+      .page-scaler { transform: scale(0.72); transform-origin: top center; }
+      .page {
+        position: relative; width: 612px; height: 792px; background: #fff;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .14), 0 12px 32px rgba(15, 23, 42, .10);
+        font-family: var(--print); color: var(--ink); overflow: hidden;
+      }
+      .page .mk { position: absolute; }
+      .page .word { position: absolute; left: 81px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1; }
+      .page .tagline { position: absolute; left: 81px; font-size: 7.5px; color: #666; line-height: 1; }
+      .page .hdr-rule { position: absolute; left: 40px; width: 532px; top: 71px; height: 1.5px; background: var(--ink); }
+      .page .banner {
+        position: absolute; left: 40px; top: 68px; width: 532px; height: 16px; background: var(--brand);
+        color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+        letter-spacing: .02em;
+      }
+      .page .right { position: absolute; right: 40px; text-align: right; line-height: 1.28; }
+      .page .r1 { top: 32px; font-size: 8.5px; font-weight: 700; }
+      .page .r2 { top: 44px; font-size: 7.5px; color: #666; }
+      .page .r3 { top: 55.5px; font-size: 7.5px; color: #666; }
+      .page .body-line { position: absolute; left: 40px; height: 7px; background: #eef2f6; border-radius: 2px; }
+
+      /* ---------- icons ---------- */
+      .icon-row { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; }
+      .icon-cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+      .icon-cell span { font-size: 10px; color: var(--faint); font-family: var(--mono); }
+      .icon-cell img { display: block; }
+
+      /* ---------- spec ---------- */
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); font-weight: 600; }
+      td code, .mono { font-family: var(--mono); font-size: 12px; }
+      .swatches { display: flex; gap: 12px; flex-wrap: wrap; }
+      .sw { width: 128px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+      .sw i { display: block; height: 54px; }
+      .sw b { display: block; font-size: 12px; padding: 8px 10px 0; }
+      .sw em { display: block; font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 2px 10px 9px; }
+
+      .note {
+        display: flex; gap: 10px; padding: 12px 14px; border-radius: 10px; font-size: 12.5px; line-height: 1.55;
+        background: #fffbeb; border: 1px solid #fde68a; color: #78350f;
+      }
+      .note.blue { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
+      .note b { font-weight: 700; }
+      ul.plain { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: #334155; }
+      .optional-font .name { font-family: "Poppins", var(--ui); }
+    </style>
+  </head>
+
+  <body>
+    <!-- The mark, defined once. Every lockup on this page references this symbol,
+         so the geometry cannot drift between the examples. Note the crossbar
+         starting at x=14 — exactly where the red bar ends. -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="hays-mark" viewBox="0 0 65 42">
+        <rect x="0" y="0" width="14" height="42" fill="#DC2626" />
+        <rect x="36" y="0" width="14" height="42" fill="currentColor" />
+        <rect x="14" y="14" width="51" height="14" fill="currentColor" />
+      </symbol>
+    </svg>
+    <div class="wrap">
+      <div class="masthead">
+        <svg class="lockup-mark" width="72" height="47" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+        <div>
+          <h1>Hays+Sons — brand preview</h1>
+          <p>
+            Rebuilt lockup: brand-red bar + heavy black plus, with the tight
+            <span class="mono">Hays+Sons</span> wordmark. Same artwork on every surface — app,
+            generated PDF packet, favicon and desktop icon.
+          </p>
+        </div>
+      </div>
+      <div class="rule"></div>
+
+      <!-- 1 ------------------------------------------------------------------>
+      <section>
+        <h2>1 — The mark</h2>
+        <p class="lede">
+          The bar and the plus are exactly the same height and share one stroke width. The plus
+          crossbar runs <b>flush into the bar</b> — no gap — so bar + crossbar + stem also read as
+          an "H", while stem + crossbar read as a "+".
+        </p>
+        <div class="grid g3">
+          <div class="card">
+            <div class="cap">Primary lockup</div>
+            <div class="body">
+              <div class="lockup">
+                <svg class="lockup-mark" width="89" height="58" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div>
+                  <div class="name" style="font-size: 29px">Hays+Sons</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">With sub-label</div>
+            <div class="body">
+              <div class="lockup">
+                <svg class="lockup-mark" width="65" height="42" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div>
+                  <div class="name" style="font-size: 21px">Hays+Sons</div>
+                  <div class="sub">Restoration Document Suite</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">On dark surfaces</div>
+            <div class="body dark" style="border-radius: 0 0 12px 12px">
+              <div class="lockup">
+                <svg class="lockup-mark" width="65" height="42" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div>
+                  <div class="name" style="font-size: 21px">Hays+Sons</div>
+                  <div class="sub">Restoration Document Suite</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2 ------------------------------------------------------------------>
+      <section>
+        <h2>2 — What changed</h2>
+        <p class="lede">
+          The mark itself is reproduced, not redrawn. What changed is the treatment the app and
+          the PDFs were using in place of it.
+        </p>
+        <div class="grid g3">
+          <div class="card">
+            <div class="cap">Replaced — old app treatment</div>
+            <div class="panel">
+              <div class="old-square">H+</div>
+              <span class="tag tag-old">Red rounded square</span>
+              <span class="strike">no red bar, no black plus</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">Reference — as supplied</div>
+            <div class="panel">
+              <div class="lockup">
+                <svg class="lockup-mark" width="65" height="42" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div class="name" style="font-size: 21px">Hays+Sons</div>
+              </div>
+              <span class="tag tag-ref">Source of truth</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">Now shipping</div>
+            <div class="panel">
+              <div class="lockup">
+                <svg class="lockup-mark" width="65" height="42" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div class="name" style="font-size: 21px">Hays+Sons</div>
+              </div>
+              <span class="tag tag-new">App + PDF + icons</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g2" style="margin-top: 16px">
+          <div class="card">
+            <div class="cap">Every change, by surface</div>
+            <div class="body" style="padding: 6px 0">
+              <table>
+                <tr><th>Surface</th><th>Before</th><th>After</th></tr>
+                <tr><td>App header</td><td class="strike">Red square, white H+</td><td>Bar + plus lockup</td></tr>
+                <tr><td>Sign-in screen</td><td class="strike">Red square, white H+</td><td>Bar + plus lockup</td></tr>
+                <tr><td>PDF header (8 docs)</td><td class="strike">All-red "H", "Hays + Sons"</td><td>Red bar + black plus</td></tr>
+                <tr><td>Favicon / PWA / desktop</td><td class="strike">Red square, white H+</td><td>Mark on white field</td></tr>
+                <tr><td>Wordmark</td><td class="strike">Hays &amp; Sons / Hays + Sons</td><td><span class="mono">Hays+Sons</span></td></tr>
+                <tr><td>Brand red</td><td class="strike">3 reds: #DC2626 / #D91A1A / #B91C1C</td><td><span class="mono">#DC2626</span></td></tr>
+                <tr><td>Ink</td><td class="strike">#1F1F1F</td><td><span class="mono">#1A1A1A</span></td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">Notes</div>
+            <div class="body" style="display: grid; gap: 12px">
+              <div class="note blue">
+                <span><b>Deliberate call:</b> the plus and the wordmark share one near-black
+                (<span class="mono">#1A1A1A</span>) so the mark locks up as a single unit, rather
+                than the plus being UI slate and the text being brand ink.</span>
+              </div>
+              <div class="note">
+                <span><b>Typeface:</b> no webfont is loaded, so the wordmark renders in the system
+                sans and varies slightly by OS. The supplied artwork uses a geometric face — if a
+                licensed web font is added later it only needs swapping in
+                <span class="mono">BrandLogo.tsx</span> and the PDF font embed.</span>
+              </div>
+              <div class="note">
+                <span><b>Icons:</b> the raster icons carry a white field because the plus is
+                near-black — transparent, it would disappear on a dark wallpaper or taskbar and the
+                mark would read as a lone red bar. The in-app mark and the SVG favicon stay
+                transparent, faithful to the artwork.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 ------------------------------------------------------------------>
+      <section>
+        <h2>3 — In the app</h2>
+        <p class="lede">Rendered by <span class="mono">components/BrandLogo.tsx</span>, 34px mark.</p>
+        <div class="grid g2">
+          <div class="card">
+            <div class="cap">Navbar</div>
+            <div class="appbar" style="border-radius: 0 0 12px 12px">
+              <div class="lockup">
+                <svg class="lockup-mark" width="53" height="34" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div>
+                  <div class="name" style="font-size: 15px">Hays+Sons</div>
+                  <div class="sub">Restoration Document Suite</div>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px">
+                <div class="chip"><i class="dot"></i> Marsh Residence · J-24081</div>
+                <div class="btn">Customers</div>
+                <div class="btn btn-primary">Save</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">Sign-in</div>
+            <div class="login" style="border-radius: 0 0 12px 12px">
+              <div class="lockup">
+                <svg class="lockup-mark" width="59" height="38" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+                <div class="name" style="font-size: 17px">Hays+Sons</div>
+              </div>
+              <div class="sub">Restoration Document Suite</div>
+              <div class="field"></div>
+              <div class="field"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 ------------------------------------------------------------------>
+      <section>
+        <h2>4 — In the PDF</h2>
+        <p class="lede">
+          To scale, 1&nbsp;px = 1&nbsp;pt on US&nbsp;Letter (612&nbsp;×&nbsp;792). Drawn by
+          <span class="mono">drawHeaderLogo()</span> in <span class="mono">services/pdfService.ts</span>
+          — the same geometry as the app mark, crossbar flush into the bar, scaled to a 22pt height
+          and set in Helvetica.
+        </p>
+        <div class="card">
+          <div class="cap">Preliminary Report — header band</div>
+          <div class="page-holder" style="height: 618px; overflow: hidden">
+            <div class="page-scaler">
+              <div class="page">
+                <!-- mark: bar / stem / crossbar -->
+                <div class="mk" style="left: 40px; top: 34.6px; width: 7.3px; height: 22px; background: var(--brand)"></div>
+                <div class="mk" style="left: 58.9px; top: 34.6px; width: 7.3px; height: 22px; background: var(--ink)"></div>
+                <div class="mk" style="left: 47.3px; top: 42px; width: 26.7px; height: 7.3px; background: var(--ink)"></div>
+                <div class="word" style="top: 733px">Hays+Sons</div>
+                <div class="tagline" style="top: 738.5px">Your Disaster Recovery Professionals</div>
+
+                <!-- branch block -->
+                <div class="right r1">Hays and Sons - Fort Wayne<br /></div>
+                <div class="right r2">2410 W Jefferson Blvd<br /></div>
+                <div class="right r3">Fort Wayne, IN 46802 &nbsp;|&nbsp; Phone: (260) 555-0140</div>
+
+                <div class="banner">PRELIMINARY REPORT — INSURANCE RESTORATION DATA</div>
+
+                <div class="body-line" style="top: 106px; width: 190px"></div>
+                <div class="body-line" style="top: 126px; width: 402px"></div>
+                <div class="body-line" style="top: 142px; width: 402px"></div>
+                <div class="body-line" style="top: 158px; width: 402px"></div>
+                <div class="body-line" style="top: 186px; width: 120px"></div>
+                <div class="body-line" style="top: 206px; width: 402px"></div>
+                <div class="body-line" style="top: 222px; width: 402px"></div>
+                <div class="body-line" style="top: 238px; width: 330px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 ------------------------------------------------------------------>
+      <section>
+        <h2>5 — Icons, favicon and desktop</h2>
+        <p class="lede">
+          Generated from <span class="mono">public/logo.svg</span> by
+          <span class="mono">npm run icons</span>. Every raster variant sits on a white field, so
+          the near-black plus survives dark wallpapers and taskbars. The in-app mark and the SVG
+          favicon stay transparent — they sit on surfaces the app controls.
+        </p>
+        <div class="grid g2">
+          <div class="card">
+            <div class="cap">Light surface</div>
+            <div class="body">
+              <div class="icon-row">
+                <div class="icon-cell"><img src="/logo.svg" width="16" height="16" alt="" /><span>svg 16</span></div>
+                <div class="icon-cell"><img src="/logo.svg" width="32" height="32" alt="" /><span>svg 32</span></div>
+                <div class="icon-cell"><img src="/favicon.ico" width="32" height="32" alt="" /><span>ico 48</span></div>
+                <div class="icon-cell"><img src="/pwa-64x64.png" width="64" height="64" alt="" /><span>pwa 64</span></div>
+                <div class="icon-cell"><img src="/apple-touch-icon-180x180.png" width="88" height="88" alt="" style="border-radius: 20px" /><span>apple 180</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">Dark surface</div>
+            <div class="body dark" style="border-radius: 0 0 12px 12px">
+              <div class="icon-row">
+                <div class="icon-cell"><img src="/logo.svg" width="16" height="16" alt="" /><span>svg 16</span></div>
+                <div class="icon-cell"><img src="/logo.svg" width="32" height="32" alt="" /><span>svg 32</span></div>
+                <div class="icon-cell"><img src="/pwa-64x64.png" width="64" height="64" alt="" /><span>pwa 64</span></div>
+                <div class="icon-cell"><img src="/pwa-192x192.png" width="88" height="88" alt="" style="border-radius: 20px" /><span>pwa 192</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 ------------------------------------------------------------------>
+      <section>
+        <h2>6 — Specification</h2>
+        <p class="lede">One red, one ink, one geometry. Mirrored in <span class="mono">index.css</span>, <span class="mono">BrandLogo.tsx</span>, <span class="mono">pdfService.ts</span> and <span class="mono">Code.gs</span>.</p>
+
+        <div class="swatches" style="margin-bottom: 18px">
+          <div class="sw"><i style="background: #dc2626"></i><b>Brand red</b><em>#DC2626</em></div>
+          <div class="sw"><i style="background: #b91c1c"></i><b>Brand red hover</b><em>#B91C1C</em></div>
+          <div class="sw"><i style="background: #1a1a1a"></i><b>Logo ink</b><em>#1A1A1A</em></div>
+          <div class="sw"><i style="background: #ffffff"></i><b>Surface</b><em>#FFFFFF</em></div>
+        </div>
+
+        <div class="grid g2">
+          <div class="card">
+            <div class="cap">Mark geometry (65 × 42 canvas)</div>
+            <div class="body" style="padding: 6px 0">
+              <table>
+                <tr><th>Part</th><th>Rect</th><th>Ratio</th></tr>
+                <tr><td>Red bar</td><td class="mono">0, 0, 14, 42</td><td>h = 3.0× stroke</td></tr>
+                <tr><td>Plus stem</td><td class="mono">36, 0, 14, 42</td><td>same height as the bar</td></tr>
+                <tr><td>Plus crossbar</td><td class="mono">14, 14, 51, 14</td><td>3.64× stroke</td></tr>
+                <tr><td>Bar → crossbar joint</td><td class="mono">x = 14</td><td>flush — no gap</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cap">Assets</div>
+            <div class="body" style="padding: 6px 0">
+              <table>
+                <tr><th>File</th><th>Role</th></tr>
+                <tr><td class="mono">public/logo.svg</td><td>Favicon + icon source</td></tr>
+                <tr><td class="mono">components/BrandLogo.tsx</td><td>App lockup (light + dark)</td></tr>
+                <tr><td class="mono">services/pdfService.ts</td><td>PDF header mark</td></tr>
+                <tr><td class="mono">apps-script/Code.gs</td><td>Sheet header</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card optional-font" style="margin-top: 16px">
+          <div class="cap">Optional — with a geometric brand face (Poppins, if licensed &amp; loaded)</div>
+          <div class="body" style="display: flex; align-items: center; gap: 26px; flex-wrap: wrap">
+            <div class="lockup">
+              <svg class="lockup-mark" width="65" height="42" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+              <div class="name" style="font-size: 21px">Hays+Sons</div>
+            </div>
+            <div class="lockup">
+              <svg class="lockup-mark" width="53" height="34" role="img" aria-label="Hays+Sons"><use href="#hays-mark" /></svg>
+              <div class="name" style="font-size: 15px">Hays+Sons</div>
+            </div>
+            <span style="font-size: 12px; color: var(--muted)">Shipped default is the system stack above.</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

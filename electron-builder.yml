@@ -1,0 +1,45 @@
+# Electron packaging — Hays + Sons Document Suite
+# Docs: https://www.electron.build/configuration/configuration
+
+appId: com.haysandsons.docsuite
+productName: Hays + Sons Document Suite
+
+directories:
+  output: dist_desktop
+  buildResources: build
+
+# Only ship the built web app + bundled Electron entry points (no node_modules).
+files:
+  - dist/**
+  - dist-electron/**
+  - '!**/*.map'
+
+asar: true
+
+# Use the Electron distribution that ships with the `electron` devDependency.
+# Avoids electron-builder re-downloading + unzipping Electron (a zip-extract
+# rename step that Windows Defender intermittently blocks with EPERM).
+electronDist: node_modules/electron/dist
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: Hays-Sons-Document-Suite-Setup-${version}.exe
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: Hays + Sons Document Suite
+
+# Auto-update feed (static files: latest.yml + installer + blockmap).
+# NOTE: the NSIS installer is ~130 MB, which exceeds Vercel's ~100 MB per-file
+# limit — host the `release/` folder somewhere without that cap (GitHub
+# Releases, Cloudflare R2, S3, …) and set the URL below to that location.
+publish:
+  - provider: generic
+    url: https://YOUR-UPDATE-FEED.example.com/

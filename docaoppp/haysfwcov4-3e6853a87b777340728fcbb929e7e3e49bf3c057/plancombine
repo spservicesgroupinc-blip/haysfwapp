@@ -1,0 +1,45 @@
+# Combine Documents and Change Orders into One App
+
+## Summary
+
+Use **haysfwco as the main app**, bringing in the full document generator from **haysdocuments-2**.
+
+Each saved job will have **Job Details, Documents, and Change Requests**. Documents can be generated before a change request exists. Shared details are entered once and reused throughout the workflow.
+
+## User experience
+
+- Keep the current review dashboard and Quick Request flow; add **Jobs & Documents** to navigation.
+- Open a job to edit customer, property, insurance, financial, mortgage, team, and production details.
+- Provide all current document types, editable previews, individual downloads, combined packets, ZIP downloads, estimate intake, and AI-assisted filling.
+- Start change requests from a job with its details prefilled. Show related requests and generated documents together.
+- Keep the existing customer change-order editor as the single preparation workflow. Its Documents entry opens the appropriate request.
+- Combined packets may include a selected change order; jobs without one generate their other documents normally.
+
+## Implementation
+
+- **Shared job records:** Add permanent job workspace IDs independent of CSV directory IDs. Add an optional workspace reference to change requests while preserving their existing snapshots and estimator corrections.
+- **Safe storage:** Extend the current change-order Apps Script backend with separate workspace and document storage. CSV replacements must never erase saved job details, requests, or documents.
+- **Document integration:** Move the generator’s templates, field editing, intake parser, and readiness checks into a lazily loaded module. Adapt its styling and remove global PDF-library patches that could affect the existing change-order generator.
+- **Cloud services:** Store generated PDFs through Apps Script and Drive. Run DeepSeek through Apps Script Properties, keeping its key server-side. Keep directory imports and customer reference imports separate.
+- **Saving:** Retain durable local autosave for document work, with background synchronization and visible pending/error states. Use revision checks and stable retry IDs to prevent lost edits or duplicate files.
+- **Financial accuracy:** Keep approved RCV and original contract amounts distinct. Preserve exact cents, credits, explicit zero, and unknown prices. Estimators remain responsible for final change-order prices.
+- **Existing data:** Provide a repeatable export/import migration for saved generator jobs and device drafts. Match only unique job numbers automatically; present ambiguous matches for selection. Preserve original records and existing Drive files.
+
+New backend actions cover listing/opening/saving workspaces, saving/fetching job documents, and intake analysis; existing request APIs remain compatible.
+
+## Verification and rollout
+
+- Verify shared details populate new requests without overwriting existing request corrections.
+- Test CSV replacement, migration retries, duplicate job numbers, offline recovery, competing edits, failed uploads, and lost responses.
+- Check every PDF type, editable previews, long text, checklist boxes, packet assembly, and financial calculations.
+- Run unit, backend, build, and browser checks; verify the installed mobile PWA before release.
+- Deploy the compatible Apps Script backend first, then test a frontend preview before updating the main app.
+
+Current local baseline: both apps pass TypeScript checks, and all **44 change-order unit tests pass**.
+
+## Defaults
+
+- Google Apps Script, Sheets, and Drive remain the backend.
+- Keep the current app entry flow and installed PWA identity.
+- The existing document app stays available during migration.
+- Windows Electron packaging is outside this integration.

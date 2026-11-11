@@ -1,0 +1,22 @@
+# Dependencies and cache
+node_modules/
+.npm
+.cache
+
+# Build outputs
+dist/
+
+# Tests & Playwright
+tests/
+test-results/
+playwright-report/
+
+# Scripts & temporary files
+tmp/
+scripts/*
+# Vite imports this fixture helper while evaluating its build configuration.
+!scripts/workspace-dev-api.ts
+
+# Environment files
+.env.local
+.env.*.local

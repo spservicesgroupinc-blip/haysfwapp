@@ -1,0 +1,360 @@
+/* Full-screen photo annotation surface. The overlay is fixed and covers the app
+   header, and every edge pads itself with the device safe-area insets so the
+   controls stay reachable on a notched phone.
+
+   The controls sit at the BOTTOM on purpose: this is used one-handed, and the
+   tools have to be inside thumb reach while the photo is being marked up. */
+.photo-annotator {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #0d1117;
+  color: #f2f4f7;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  overscroll-behavior: contain;
+  touch-action: manipulation;
+}
+.photo-annotator-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 10px;
+  background: #0d1117;
+  border-bottom: 1px solid #1e2530;
+}
+.photo-annotator-head-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  border: 1px solid #2c3441;
+  border-radius: 10px;
+  background: #1a212c;
+  color: #e7ebf1;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.photo-annotator-head-button:hover {
+  background: #222b38;
+}
+.photo-annotator-head-button:focus-visible,
+.photo-annotator-commit:focus-visible,
+.photo-annotator-cancel-text:focus-visible,
+.pa-tool:focus-visible,
+.pa-color:focus-visible,
+.pa-width:focus-visible {
+  outline: 2px solid #f8fafc;
+  outline-offset: 2px;
+}
+.photo-annotator-head-button:disabled {
+  opacity: 0.55;
+}
+.photo-annotator-save {
+  background: var(--red, #dc2626);
+  border-color: var(--red, #dc2626);
+  color: #fff;
+}
+.photo-annotator-save:hover {
+  background: #b91c1c;
+}
+.photo-annotator-save-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+.photo-annotator-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  line-height: 1.25;
+}
+.photo-annotator-title strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 650;
+}
+.photo-annotator-title small {
+  display: block;
+  font-size: 10px;
+  color: #99a3b1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.photo-annotator-error {
+  flex-shrink: 0;
+  margin: 8px 10px 0;
+  padding: 10px 13px;
+  border: 1px solid #7f1d1d;
+  border-radius: 9px;
+  background: #2a1416;
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* The stage is the measured box: the canvas is sized (in JS) to contain the
+   photo inside it, so the photo is never cropped and never upscaled past fit. */
+.photo-annotator-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 8px;
+}
+.photo-annotator-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+}
+.photo-annotator-canvas {
+  display: block;
+  border-radius: 4px;
+  background: #10151d;
+  box-shadow: 0 8px 30px #00000073;
+  /* No panning, no pinch-zoom, no double-tap-zoom: the gesture belongs to the
+     pen. Without this a finger drag scrolls the page underneath the overlay. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: crosshair;
+}
+.photo-annotator-loading {
+  position: absolute;
+  font-size: 12px;
+  color: #99a3b1;
+}
+.photo-annotator-controls {
+  flex-shrink: 0;
+  background: #0d1117;
+  border-top: 1px solid #1e2530;
+  padding: 8px 8px 10px;
+}
+.photo-annotator-text-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+.photo-annotator-text-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid #2c3441;
+  border-radius: 9px;
+  background: #1a212c;
+  color: #f2f4f7;
+  font-size: 16px;
+}
+.photo-annotator-text-input::placeholder {
+  color: #8b95a3;
+}
+.photo-annotator-text-input:focus {
+  border-color: var(--red, #dc2626);
+  box-shadow: 0 0 0 3px #dc262640;
+}
+.photo-annotator-commit,
+.photo-annotator-cancel-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  border: 1px solid #2c3441;
+  border-radius: 9px;
+  background: #1a212c;
+  color: #e7ebf1;
+  font-size: 13px;
+  font-weight: 600;
+}
+.photo-annotator-commit {
+  background: var(--red, #dc2626);
+  border-color: var(--red, #dc2626);
+  color: #fff;
+}
+.photo-annotator-commit:disabled,
+.photo-annotator-cancel-text:disabled {
+  opacity: 0.45;
+}
+.photo-annotator-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+/* Each group is a segmented cluster; groups wrap as whole units so the tool
+   labels never break in half on a narrow phone. */
+.photo-annotator-group {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #2c3441;
+  border-radius: 11px;
+  background: #151c26;
+}
+.pa-tool,
+.pa-width {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #c3cbd7;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+.pa-tool:hover,
+.pa-width:hover {
+  background: #1f2836;
+  color: #fff;
+}
+.pa-tool:disabled,
+.pa-width:disabled {
+  opacity: 0.4;
+}
+.pa-tool[aria-pressed="true"],
+.pa-width[aria-pressed="true"] {
+  background: var(--red, #dc2626);
+  color: #fff;
+}
+.pa-color {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 2px solid #414b5a;
+  border-radius: 10px;
+  /* Inner white ring keeps the black and white swatches readable on the dark
+     toolbar without changing their fill colour. */
+  box-shadow: inset 0 0 0 2px #0d1117;
+}
+.pa-color[aria-pressed="true"] {
+  border-color: #fff;
+  box-shadow:
+    inset 0 0 0 2px #0d1117,
+    0 0 0 2px var(--red, #dc2626);
+}
+.pa-width-bar {
+  display: block;
+  width: 26px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.photo-annotator-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #05070ac9;
+}
+.photo-annotator-confirm-box {
+  width: min(360px, 100%);
+  padding: 20px;
+  border: 1px solid #2c3441;
+  border-radius: 14px;
+  background: #151c26;
+  color: #f2f4f7;
+  box-shadow: 0 18px 44px #00000080;
+}
+.photo-annotator-confirm-box h2 {
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.photo-annotator-confirm-box p {
+  color: #a7b1bf;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.photo-annotator-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.photo-annotator-confirm-cancel,
+.photo-annotator-confirm-clear {
+  flex: 1;
+  min-height: 48px;
+  border: 1px solid #2c3441;
+  border-radius: 9px;
+  background: #1a212c;
+  color: #e7ebf1;
+  font-size: 13px;
+  font-weight: 650;
+}
+.photo-annotator-confirm-clear {
+  background: var(--red, #dc2626);
+  border-color: var(--red, #dc2626);
+  color: #fff;
+}
+.photo-annotator-confirm-cancel:focus-visible,
+.photo-annotator-confirm-clear:focus-visible {
+  outline: 2px solid #f8fafc;
+  outline-offset: 2px;
+}
+@media (max-width: 430px) {
+  /* Cancel folds to its icon on a phone, but the Save button must keep both
+     its dot and its "Save" label: hiding every span in the header left Save as
+     a bare red rectangle, so a PM marking up a photo saw no save control. */
+  .photo-annotator-head-button:not(.photo-annotator-save) span {
+    display: none;
+  }
+  .photo-annotator-head-button {
+    padding: 0 12px;
+  }
+  .photo-annotator-title {
+    text-align: left;
+  }
+  .photo-annotator-title small {
+    max-width: 100%;
+  }
+  .pa-tool,
+  .pa-width {
+    min-width: 52px;
+  }
+  .photo-annotator-toolbar {
+    gap: 6px;
+  }
+}
+@media (max-height: 520px) {
+  /* Landscape phone: keep the photo usable by trimming chrome, never the
+     touch targets. */
+  .photo-annotator-stage {
+    padding: 4px;
+  }
+  .pa-tool span,
+  .pa-width span:last-child {
+    display: none;
+  }
+  .pa-tool,
+  .pa-width {
+    min-height: 48px;
+  }
+}

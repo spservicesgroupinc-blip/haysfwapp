@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#dc2626" />
+    <meta
+      name="description"
+      content="Quick change order intake and estimator review workflow."
+    />
+    <meta property="og:title" content="Hays + Sons Change Orders" />
+    <meta
+      property="og:description"
+      content="Quick change order intake and estimator review workflow."
+    />
+    <link rel="icon" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ChangeOrders" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>Hays + Sons Change Orders</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // If nothing rendered, the bundle never ran — usually an offline shell
+      // from an older deployment. Reload once to fetch the current build.
+      setTimeout(function () {
+        var root = document.getElementById("root");
+        if (!root || root.childElementCount) return;
+        try {
+          if (sessionStorage.getItem("hays-boot-recovery")) return;
+          sessionStorage.setItem("hays-boot-recovery", "1");
+        } catch (error) {
+          return;
+        }
+        location.reload();
+      }, 10000);
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

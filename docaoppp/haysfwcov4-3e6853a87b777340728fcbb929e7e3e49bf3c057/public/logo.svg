@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Hays+Sons">
+  <!-- Hays + Sons brand mark: brand-red bar + heavy black plus of the same height,
+       whose crossbar runs flush into the bar (no gap) so the mark also reads as an "H".
+       Square field so the file works as the SVG favicon; the raster PWA/icons are
+       generated from public/logo-icon.svg. Geometry mirrors components/BrandLogo.tsx
+       (a 65 x 42 mark) scaled 6.6x and centred. -->
+  <g transform="translate(41.5 117.4) scale(6.6)">
+    <rect x="0" y="0" width="14" height="42" fill="#DC2626"/>
+    <rect x="36" y="0" width="14" height="42" fill="#1A1A1A"/>
+    <rect x="14" y="14" width="51" height="14" fill="#1A1A1A"/>
+  </g>
+</svg>

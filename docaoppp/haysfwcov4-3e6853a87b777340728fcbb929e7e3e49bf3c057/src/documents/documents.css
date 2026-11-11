@@ -1,0 +1,52 @@
+@import 'tailwindcss/theme.css' layer(theme);
+@source './components';
+@source './JobWorkspace.tsx';
+
+/* Keep generated utility selectors inside this workspace. Leave them unlayered
+   so the shell's unlayered element styles cannot override their colors/sizing. */
+.documents-workspace {
+  @tailwind utilities;
+}
+
+/* The generator shares the existing application shell. Keep control refinements
+   inside its lazy workspace and do not load Tailwind's global preflight. */
+:where(.documents-workspace, .documents-workspace *, .documents-workspace *::before, .documents-workspace *::after) {
+  box-sizing: border-box;
+  border-style: solid;
+  border-width: 0;
+  border-color: currentColor;
+}
+:where(.documents-workspace h1, .documents-workspace h2, .documents-workspace h3, .documents-workspace p,
+       .documents-workspace dl, .documents-workspace dd) { margin: 0; }
+:where(.documents-workspace button, .documents-workspace input, .documents-workspace select, .documents-workspace textarea) {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+}
+:where(.documents-workspace button) { appearance: button; }
+.documents-workspace input,
+.documents-workspace select,
+.documents-workspace textarea {
+  font-family: inherit;
+  min-width: 0;
+  max-width: 100%;
+}
+.documents-workspace .grid > * { min-width: 0; }
+.documents-workspace p { overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .documents-workspace input,
+  .documents-workspace select,
+  .documents-workspace textarea { font-size: 16px; }
+  .documents-workspace input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  .documents-workspace select,
+  .documents-workspace button { min-height: 44px; }
+  .documents-workspace input[type='checkbox'],
+  .documents-workspace input[type='radio'] { width: 20px; height: 20px; }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

@@ -1,0 +1,46 @@
+import { test, expect } from "@playwright/test";
+import { mockBackend } from "./helpers/backend";
+import { workspaceFromDirectory } from "../src/workspaces/model";
+import type { JobEntry } from "../src/types";
+import { mkdir } from "node:fs/promises";
+
+test("customer overview presents contacts, jobs and follow-ups on desktop and phone", async ({ page }) => {
+  const backend = mockBackend();
+  const entry: JobEntry = { id: "overview-job", jobNumber: "FW-26-1042", customer: "Oak & Stone Property Group", address: "1280 West Jefferson Boulevard, Fort Wayne IN 46802", projectManager: "Jordan Miller", estimator: "Casey Morgan", status: "Work in Progress", customerPhone: "260-555-0142", customerEmail: "operations@oakandstone.example", contractAmount: "42950.00", active: true, updatedAt: "2026-10-23T12:00:00Z" };
+  expect(backend.post({ action: "importJobs", jobs: [entry, { ...entry, id: "overview-job-2", jobNumber: "FW-26-1053", address: "85 North Clinton Street, Fort Wayne IN 46802" }] }).ok).toBe(true);
+  const customer = backend.post({ action: "listCustomers" }).customers[0];
+  const workspace = workspaceFromDirectory(entry);
+  workspace.customerId = customer.id;
+  workspace.stage = "in_progress";
+  expect(backend.post({ action: "saveWorkspace", workspace, mutationId: "overview-job-save", expectedRevision: 0 }).ok).toBe(true);
+  expect(backend.post({ action: "addActivity", activity: { id: "overview-activity", customerId: customer.id, kind: "call", direction: "outbound", body: "Confirmed the repair schedule with the property manager. Access is available Monday after 8 AM.", at: "2026-10-23T12:00:00Z" }, mutationId: "overview-note" }).ok).toBe(true);
+  expect(backend.post({ action: "saveTask", task: { id: "overview-task", customerId: customer.id, title: "Confirm flooring selection", assignee: "Jordan", dueDate: "2026-10-28", status: "open", revision: 0 }, mutationId: "overview-task", expectedRevision: 0 }).ok).toBe(true);
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (["localhost", "127.0.0.1"].includes(url.hostname) && !url.pathname.includes("__api__")) return route.continue();
+    if (!["fetch", "xhr"].includes(request.resourceType())) return route.abort();
+    const body = request.method() === "POST" ? JSON.parse(request.postData() || "{}") : Object.fromEntries(url.searchParams);
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(request.method() === "POST" ? backend.post(body) : backend.get(body)) });
+  });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(`/#/customers/${customer.id}`);
+  await expect(page.getByRole("heading", { name: entry.customer, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Call customer", exact: true })).toHaveAttribute("href", "tel:2605550142");
+  await expect(page.getByRole("region", { name: "Contact details", exact: true })).toContainText(entry.customerEmail);
+  await expect(page.getByRole("region", { name: "Jobs", exact: true })).toContainText("FW-26-1053");
+  await expect(page.getByRole("region", { name: "Tasks", exact: true })).toContainText("Confirm flooring selection");
+  await expect(page.getByRole("region", { name: "Activity", exact: true })).toContainText("Confirmed the repair schedule");
+  await mkdir("tmp", { recursive: true });
+  await page.screenshot({ path: "tmp/customer-overview-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("link", { name: "Call customer", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "tmp/customer-overview-phone.png", fullPage: true });
+  await page.setViewportSize({ width: 320, height: 740 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Open job FW-26-1053", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Job number*", exact: true })).toHaveValue("FW-26-1053");
+  expect(errors).toEqual([]);
+});

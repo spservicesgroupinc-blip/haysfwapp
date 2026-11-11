@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * Brand tokens
+ *
+ * One brand red and one logo ink, defined once and referenced by the app, the
+ * generated PDFs (`COLOR_RED` / `COLOR_DARK` in services/pdfService.ts) and the
+ * Apps Script sheet header. `--color-brand` is intentionally identical to
+ * Tailwind's `red-600` so existing `bg-red-600` call sites are already on-brand.
+ * ------------------------------------------------------------------------ */
+@theme {
+  --color-brand: #dc2626;
+  --color-brand-hover: #b91c1c;
+  --color-ink: #1a1a1a;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base typography and control polish
+ * ------------------------------------------------------------------------ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Native number spinners look out of place in a data-entry UI. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Mobile form controls
+ *
+ * iOS Safari auto-zooms into any <input>/<select>/<textarea> whose computed
+ * font-size is below 16px. This rule is intentionally un-layered so it outranks
+ * Tailwind's layered utility classes (text-[13px], text-sm, …) on small screens,
+ * while element-attached (inline) styles — used by the click-to-edit PDF overlay
+ * to match the on-page type size — still win and are left alone.
+ * ------------------------------------------------------------------------ */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select {
+    min-height: 44px;
+  }
+
+  button,
+  label:has(input[type='file']) {
+    min-height: 44px;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  /* Allow long customer names, emails and imported file names to fit cards. */
+  main p,
+  main h3,
+  main h5 {
+    overflow-wrap: anywhere;
+  }
+
+  main .grid > * {
+    min-width: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Utilities
+ * ------------------------------------------------------------------------ */
+
+/* Horizontal tab strips should scroll without a visible scrollbar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Safe-area padding for notched phones in standalone / PWA mode. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}

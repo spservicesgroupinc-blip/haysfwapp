@@ -1,0 +1,46 @@
+.fatal {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: #f6f7f9;
+}
+.fatal-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 34px;
+  max-width: 520px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.fatal-card .empty-icon {
+  margin-bottom: 4px;
+}
+.fatal-card h1 {
+  font-size: 22px;
+  letter-spacing: -0.5px;
+}
+.fatal-card p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.fatal-card code {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f7f8fa;
+  border: 1px solid var(--border);
+  color: #65707e;
+  font-size: 11px;
+  text-align: left;
+  word-break: break-word;
+}
+.fatal-card .button-row {
+  margin-top: 8px;
+}

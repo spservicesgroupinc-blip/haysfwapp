@@ -1,0 +1,73 @@
+
+function mutateJobWorkspace_(user, payload) {
+  if (['admin', 'editor'].indexOf(user.role) === -1) throw appError_('forbidden', 'You do not have permission to update this workspace.');
+  return withWriteLock_(function () {
+    var recordId = workspaceId_(payload.recordId);
+    var id = workspaceId_(payload.id);
+    var operationId = workspaceId_(payload.operationId);
+    var kind = workspaceChoice_(payload.kind, Object.keys(WORKSPACE_SHEETS), 'record type');
+    if (!Number.isInteger(payload.expectedRevision) || payload.expectedRevision < 0) throw appError_('bad_request', 'Invalid revision.');
+    getJob_(user, recordId);
+    var request = JSON.stringify({ actor: user.email, recordId: recordId, id: id, kind: kind, revision: payload.expectedRevision, data: payload.data });
+    if (request.length > 15000) throw appError_('bad_request', 'Workspace entry is too large.');
+    var table = workspaceRows_(kind, true);
+    var replay = table.rows.filter(function (row) { return String(row[3]) === operationId; })[0];
+    if (replay) {
+      if (replay[4] !== request) throw appError_('bad_request', 'Operation ID reused with different data.');
+      return JSON.parse(replay[5]);
+    }
+    var entities = workspaceEntities_(recordId);
+    var existing = entities.filter(function (e) { return e.kind === kind && e.id === id; })[0];
+    if ((existing ? existing.revision : 0) !== payload.expectedRevision) throw appError_('conflict', 'This entry changed on another device. Review the latest version before saving.');
+    var input = payload.data || {};
+    var d;
+    var now = new Date().toISOString();
+    if (kind === 'workItem') {
+      d = { title: workspaceText_(input.title, 200, 'Title', true), description: workspaceText_(input.description, 6000, 'Description'),
+        category: workspaceChoice_(input.category, ['Task', 'Issue'], 'category'), status: workspaceChoice_(input.status, ['Open', 'In Progress', 'Blocked', 'Done', 'Cancelled'], 'status'),
+        priority: workspaceChoice_(input.priority, ['Low', 'Normal', 'High', 'Urgent'], 'priority'), dueDate: workspaceDate_(input.dueDate, false),
+        assignee: workspaceText_(input.assignee, 254, 'Assignee').toLowerCase(), changeOrderId: workspaceText_(input.changeOrderId, 120, 'Linked change order') };
+      if (d.assignee && (!existing || existing.data.assignee !== d.assignee) && !workspaceStaff_().some(function (staff) { return staff.email === d.assignee; })) {
+        throw appError_('bad_request', 'Assign to an active staff account.');
+      }
+      if (d.changeOrderId && !entities.some(function (e) { return e.kind === 'changeOrder' && e.id === d.changeOrderId; })) throw appError_('bad_request', 'Linked change order does not belong to this job.');
+    } else if (kind === 'comment') {
+      if (existing) throw appError_('bad_request', 'Posted comments are read-only.');
+      d = { parentId: workspaceId_(input.parentId), body: workspaceText_(input.body, 4000, 'Comment', true) };
+      if (!entities.some(function (e) { return e.kind === 'workItem' && e.id === d.parentId; })) throw appError_('bad_request', 'Comment needs a saved work item in this job.');
+    } else if (kind === 'contract') {
+      if (id !== 'contract') throw appError_('bad_request', 'Invalid contract settings identifier.');
+      d = { originalCents: workspaceMoney_(input.originalCents, false), openingCents: workspaceMoney_(input.openingCents, true), reviewed: true,
+        reason: workspaceText_(input.reason, 1000, 'Review note', !!existing), reviewedBy: user.email, reviewedAt: now };
+    } else {
+      if (existing && ['Approved', 'Voided'].indexOf(existing.data.status) !== -1) {
+        if (existing.data.status === 'Voided' || input.status !== 'Voided') throw appError_('bad_request', 'Approved and voided orders are read-only. Void an approved order and create a replacement.');
+        // Only status and reason may change when voiding an approved order.
+        d = JSON.parse(JSON.stringify(existing.data));
+        d.status = 'Voided';
+        d.voidReason = workspaceText_(input.voidReason, 1000, 'Void reason', true);
+        d.voidedBy = user.email; d.voidedAt = now;
+      } else {
+        d = { number: workspaceText_(input.number, 40, 'Change order number', true), date: workspaceDate_(input.date, true),
+          scopeDescription: workspaceText_(input.scopeDescription, 6000, 'Scope', true), isInsuranceRelated: input.isInsuranceRelated === true,
+          amountCents: workspaceMoney_(input.amountCents, false), changeType: workspaceChoice_(input.changeType, ['increase', 'decrease', 'unchanged'], 'change type'),
+          status: workspaceChoice_(input.status, ['Draft', 'Submitted', 'Approved', 'Rejected'], 'change status'), addedDays: Number(input.addedDays) };
+        if (!Number.isInteger(d.addedDays) || d.addedDays < 0 || d.addedDays > 3650) throw appError_('bad_request', 'Added days must be a whole number from 0 to 3650.');
+        if (entities.some(function (e) { return e.kind === 'changeOrder' && e.id !== id && e.data.number.toLowerCase() === d.number.toLowerCase(); })) throw appError_('bad_request', 'Change order number already exists in this job.');
+        if (d.status === 'Approved') {
+          var contract = entities.filter(function (e) { return e.kind === 'contract'; })[0];
+          if (!contract || !contract.data.reviewed) throw appError_('bad_request', 'Complete the contract review before approving a change.');
+          d.originalCents = contract.data.originalCents;
+          d.previousCents = contract.data.openingCents + entities.filter(function (e) { return e.kind === 'changeOrder' && e.data.status === 'Approved'; }).reduce(function (sum, e) { return sum + workspaceDelta_(e.data); }, 0);
+          d.approvedAt = now; d.approvedBy = user.email;
+        }
+      }
+    }
+    var entity = { id: id, recordId: recordId, kind: kind, revision: (existing ? existing.revision : 0) + 1, updatedAt: now, updatedBy: user.email, data: d };
+    var detail = kind === 'workItem' ? d.category + ': ' + d.title + ' - ' + d.status + (d.assignee ? ' - assigned to ' + d.assignee : ' - unassigned') :
+      kind === 'comment' ? 'Comment added' : kind === 'contract' ? 'Contract opening balance reviewed' : d.number + ' - ' + d.status;
+    var activity = { id: operationId, entityId: id, at: now, actor: user.email, detail: detail };
+    table.sheet.appendRow([id, recordId, entity.revision, operationId, request, JSON.stringify(entity), JSON.stringify(activity)]);
+    return entity;
+  });
+}

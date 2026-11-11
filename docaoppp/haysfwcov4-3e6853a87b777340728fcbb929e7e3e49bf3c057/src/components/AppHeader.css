@@ -1,0 +1,188 @@
+/* Shared application chrome. Sticky so the way home is always on screen, even
+   at the bottom of a long request form. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.app-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 84px;
+  padding: 0 42px;
+}
+.app-header .brand {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 8px;
+}
+.app-header .brand:hover strong {
+  color: #b91c1c;
+}
+.app-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-nav-item.is-current {
+  border-color: #f0b9b9;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+/* Scoped to beat the generic ".button" rule, which is bundled after this file
+   and would otherwise force the menu button onto the desktop header too. */
+.app-header .app-menu-button {
+  display: none;
+}
+.app-header-sub {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 42px 10px;
+  border-top: 1px solid #eef0f3;
+  background: #fbfcfd;
+}
+.app-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 1px solid #dbe0e7;
+  border-radius: 7px;
+  background: #fff;
+  color: #3e4756;
+  font-size: 13px;
+  font-weight: 650;
+  flex-shrink: 0;
+}
+.app-back:hover {
+  border-color: #c3c9d2;
+  background: #f7f8fa;
+  color: #17202e;
+}
+.app-subtitle {
+  font-size: 12px;
+  color: #76808f;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-progress {
+  height: 3px;
+  background: #fee2e2;
+  overflow: hidden;
+  position: relative;
+}
+.app-progress span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  background: var(--red);
+  animation: app-progress-slide 1.1s ease-in-out infinite;
+}
+@keyframes app-progress-slide {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+@media (max-width: 1120px) {
+  /* The brand still returns home, so the extra link can step aside. */
+  .desktop-nav .nav-home {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .app-header-row {
+    min-height: 76px;
+    padding: 0 24px;
+  }
+  .app-header-sub {
+    padding: 8px 24px 9px;
+  }
+}
+
+/* Narrow screens collapse the section links behind a menu button so the
+   header keeps a comfortable tap target and never wraps into three rows. */
+@media (max-width: 860px) {
+  .app-header .app-menu-button {
+    display: inline-flex;
+  }
+  .app-nav {
+    display: none;
+  }
+  .app-nav.is-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    padding: 10px 14px 14px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 16px 32px #0f1a2a1f;
+  }
+  .app-nav.is-open .app-nav-item {
+    justify-content: flex-start;
+    width: 100%;
+    min-height: 46px;
+    font-size: 13px;
+  }
+  .app-header .local-label {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-header-row {
+    min-height: 64px;
+    padding: 6px 16px;
+  }
+  .app-header-tools {
+    gap: 8px;
+  }
+  .app-header .brand > svg {
+    width: 36px;
+    height: 24px;
+  }
+  .app-header .brand strong {
+    font-size: 19px;
+  }
+  .app-header .brand span {
+    font-size: 8px;
+    letter-spacing: 2px;
+    margin-top: 3px;
+  }
+  .app-header .local-label {
+    display: none;
+  }
+  .app-header-sub {
+    padding: 8px 16px;
+    gap: 10px;
+  }
+  .app-back {
+    min-height: 40px;
+  }
+}

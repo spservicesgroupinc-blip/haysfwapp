@@ -1,0 +1,6 @@
+# PWA Code Inspector bundle patch: one row carrying both the Host half
+# (inspection engine, route, tool, command, skill) and the Client half
+# (sidebar panel) because the row specifier is the bare package name.
+- insert:
+    - id: pwa-code-inspector
+      name: '@local/pwa-code-inspector'

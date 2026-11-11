@@ -1,0 +1,71 @@
+.install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 42px;
+  background: #1a1a1a;
+  color: #fff;
+  border-bottom: 1px solid #000;
+  animation: install-slide 0.25s ease;
+}
+.install-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.install-banner-text strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.install-banner-text span {
+  font-size: 12px;
+  color: #c3c9d2;
+}
+.install-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.install-banner .button.small {
+  min-height: 34px;
+}
+.install-banner .icon-button {
+  color: #c3c9d2;
+}
+.install-banner .icon-button:hover {
+  color: #fff;
+  background: #ffffff1f;
+}
+.install-share-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: #ffffff14;
+  color: #fff;
+}
+@keyframes install-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 640px) {
+  .install-banner {
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .install-banner-actions {
+    justify-content: flex-end;
+  }
+}
