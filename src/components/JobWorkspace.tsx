@@ -87,7 +87,10 @@ export function JobWorkspace({ job, recordId, tab, navigate, preview, online, on
       const queued = latest.pending.find(op => op.mutation?.operationId === operationId);
       if (!mounted.current) return false;
       setView(latest);
-      if (queued?.lastError) { setError(queued.lastError); return false; }
+      if (queued?.lastError) {
+        setError(queued.lastError);
+        if (['conflict', 'bad_request', 'forbidden'].includes(queued.errorCode ?? '')) return false;
+      }
       setMessage(queued ? (financial ? 'Financial decision is awaiting cloud confirmation. Confirmed totals remain unchanged.' : 'Saved on this device. Waiting to sync.') : 'Saved and synced.');
       return !financial || !queued;
     } catch (err) { if (mounted.current) setError(err instanceof Error ? err.message : String(err)); return false; }
@@ -101,7 +104,7 @@ export function JobWorkspace({ job, recordId, tab, navigate, preview, online, on
   }, [recordId, documentOrder, totals.reviewed, job, view.entities, onDocumentOrder]);
   const work = view.entities.filter(e => e.kind === 'workItem');
   const open = work.filter(e => !['Done', 'Cancelled'].includes(e.data.status));
-  const failed = view.pending.filter((op, index, all) => op.lastError && all.findIndex(other => other.mutation?.id === op.mutation?.id && other.lastError) === index);
+  const failed = view.pending.filter((op, index, all) => ['conflict', 'bad_request'].includes(op.errorCode ?? '') && all.findIndex(other => other.mutation?.id === op.mutation?.id && ['conflict', 'bad_request'].includes(other.errorCode ?? '')) === index);
   function quick(category: string) { setQuickCategory(category); setTaskSession(n => n + 1); navigate('tasks'); }
   async function reconcile(entity: WorkspaceEntity, keep: boolean) {
     setBusy(true); setError('');

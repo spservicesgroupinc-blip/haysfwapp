@@ -6,7 +6,7 @@ const user = { email: 'staff@example.com', name: 'Staff Member', role: 'editor' 
 const ok = (route: Route, data: unknown) => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ ok: true, data }) });
 const job = { ...structuredClone(SAMPLE_WATER), recordId: 'dashboard-job', customer: { ...SAMPLE_WATER.customer, jobNumber: 'DASH-1', customerName: 'Dashboard Customer' }, changeOrder: { ...SAMPLE_WATER.changeOrder, scopeDescription: '', changeAmount: '' as const, netPreviousChanges: 0 } };
 
-async function start(page: Page, role = 'editor') {
+async function start(page: Page, role = 'editor', savedJob = job) {
   const entities = new Map<string, WorkspaceEntity>();
   const activity: any[] = [];
   let conflict = false;
@@ -18,7 +18,7 @@ async function start(page: Page, role = 'editor') {
     const body = route.request().postDataJSON();
     if (body.action === 'checkSession') return ok(route, { user: account });
     if (body.action === 'listJobs') return ok(route, [{ recordId: job.recordId, jobNumber: 'DASH-1', customerName: job.customer.customerName, updatedAt: '2026-11-11T12:00:00Z', status: 'Active' }]);
-    if (body.action === 'getJob') return ok(route, job);
+    if (body.action === 'getJob') return ok(route, savedJob);
     if (body.action === 'getDraft') return ok(route, { draft });
     if (body.action === 'getCustomerReference') return ok(route, { customers: [], fileName: '', updatedAt: '', updatedBy: '' });
     if (body.action === 'saveDraft') { draft = { job: body.draft.job, recordId: body.draft.recordId, updatedAt: new Date().toISOString() }; return ok(route, draft); }
@@ -63,6 +63,7 @@ test('customer dashboard logs assigned issues, comments, completion and activity
   await item.click();
   await page.getByLabel('Add a comment', { exact: true }).fill('Confirmed finish selection with customer.');
   await page.getByRole('button', { name: 'Post comment', exact: true }).click();
+  await expect(page.getByLabel('Add a comment', { exact: true })).toHaveValue('');
   await expect(page.getByText('Confirmed finish selection with customer.', { exact: true })).toBeVisible();
   await page.getByLabel('Status', { exact: true }).selectOption('Done');
   await page.getByRole('button', { name: 'Save work item', exact: true }).click();
@@ -77,7 +78,8 @@ test('customer dashboard logs assigned issues, comments, completion and activity
 });
 
 test('contract review and approval update totals and selected PDF without mutating legacy form', async ({ page }) => {
-  await start(page);
+  await start(page, 'editor', { ...job, changeOrderHistory: [{ ...job.changeOrder, id: 'old-order', recordedAt: '2026-10-01T12:00:00Z',
+    changeOrderNumber: 'CO-OLD', originalContractSum: 50000, netPreviousChanges: 0, changeAmount: 1000, scopeDescription: 'Legacy work' }] });
   await dashboardNav(page).getByRole('button', { name: 'Change Orders', exact: true }).click();
   await page.getByRole('button', { name: 'Review contract', exact: true }).click();
   await page.getByLabel('Original contract amount', { exact: true }).fill('10000');
@@ -109,6 +111,15 @@ test('contract review and approval update totals and selected PDF without mutati
   await modal.getByTitle('Close modal').click();
   await dashboardNav(page).getByRole('button', { name: 'Documents', exact: true }).click();
   await expect(page.locator('strong').filter({ hasText: 'CO-01 (Approved)' })).toBeVisible();
+  const packetDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download packet', exact: true }).click();
+  const packetStream = await (await packetDownload).createReadStream();
+  const packetChunks: Buffer[] = [];
+  for await (const chunk of packetStream) packetChunks.push(Buffer.from(chunk));
+  const packet = await pdfjs.getDocument({ data: new Uint8Array(Buffer.concat(packetChunks)), isEvalSupported: false, useSystemFonts: true }).promise;
+  const packetChange = (await (await packet.getPage(7)).getTextContent()).items.map((item: any) => item.str || '').join(' ');
+  expect(packetChange).toContain('10,750.00');
+  expect(packetChange).not.toContain('50,000.00');
 });
 
 test('offline tasks survive reload and replay once after reconnect', async ({ page, context }) => {
@@ -126,6 +137,24 @@ test('offline tasks survive reload and replay once after reconnect', async ({ pa
   await dashboardNav(page).getByRole('button', { name: 'Tasks & Issues', exact: true }).click();
   await expect(page.getByRole('button').filter({ hasText: 'Offline follow-up' })).toBeVisible();
   await expect.poll(() => state.entities.size).toBe(1);
+  expect(state.writes()).toBe(1);
+});
+
+test('a task with a failed network response stays durable without inviting a duplicate submission', async ({ page }) => {
+  const state = await start(page);
+  let fail = true;
+  await page.route(/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/, route => {
+    if (route.request().postDataJSON().action === 'mutateJobWorkspace' && fail) return route.abort('failed');
+    return route.fallback();
+  });
+  await page.getByRole('button', { name: 'Create a task', exact: true }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Recover this saved task');
+  await page.getByRole('button', { name: 'Save work item', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Save work item', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button').filter({ hasText: 'Recover this saved task' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sync now', exact: true })).toBeVisible();
+  fail = false;
+  await expect.poll(() => state.entities.size, { timeout: 10000 }).toBe(1);
   expect(state.writes()).toBe(1);
 });
 

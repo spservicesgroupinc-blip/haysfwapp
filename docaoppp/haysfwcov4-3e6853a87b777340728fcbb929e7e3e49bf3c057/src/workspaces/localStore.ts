@@ -2,6 +2,14 @@ import type { DocumentRow, WorkspaceRow } from "./types";
 
 const DATABASE = "hays-job-workspaces-v1";
 let connection: Promise<IDBDatabase> | undefined;
+let currentDatabase: IDBDatabase | undefined;
+
+/** Release the stale handle without deleting any cached jobs or documents. */
+export function reopenWorkspaceDatabase(): void {
+  currentDatabase?.close();
+  currentDatabase = undefined;
+  connection = undefined;
+}
 function database(): Promise<IDBDatabase> {
   connection ??= new Promise((resolve, reject) => {
     const open = indexedDB.open(DATABASE, 1);
@@ -12,7 +20,19 @@ function database(): Promise<IDBDatabase> {
       });
       documents.createIndex("workspace", "document.workspaceId");
     };
-    open.onsuccess = () => resolve(open.result);
+    open.onsuccess = () => {
+      const db = open.result;
+      currentDatabase = db;
+      const forget = () => {
+        if (currentDatabase === db) {
+          currentDatabase = undefined;
+          connection = undefined;
+        }
+      };
+      db.onversionchange = () => { db.close(); forget(); };
+      db.onclose = forget;
+      resolve(db);
+    };
     open.onerror = () => {
       connection = undefined;
       reject(open.error);
@@ -21,7 +41,24 @@ function database(): Promise<IDBDatabase> {
   return connection;
 }
 
-async function read<T>(
+async function withDeviceRecovery<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return await operation(); }
+    catch (error) {
+      const name = (error as { name?: string })?.name;
+      if (name !== 'UnknownError' && name !== 'InvalidStateError') throw error;
+      reopenWorkspaceDatabase();
+      if (attempt === 1) {
+        const failure = new Error('This browser could not open device storage. Saved jobs have not been cleared. Close other windows for this app and retry.', { cause: error });
+        Object.assign(failure, { code: 'DEVICE_STORAGE' });
+        throw failure;
+      }
+    }
+  }
+  throw new Error('Could not open device storage.');
+}
+
+async function readOnce<T>(
   store: string,
   operation: (store: IDBObjectStore) => IDBRequest,
 ): Promise<T> {
@@ -36,7 +73,7 @@ async function read<T>(
 }
 
 /** Read and replace in one transaction, so competing tabs cannot drop newer edits. */
-async function update<T>(
+async function updateOnce<T>(
   store: string,
   id: string,
   change: (current: T | undefined) => T | undefined,
@@ -66,6 +103,11 @@ async function update<T>(
       );
   });
 }
+
+const read = <T>(store: string, operation: (store: IDBObjectStore) => IDBRequest) =>
+  withDeviceRecovery(() => readOnce<T>(store, operation));
+const update = <T>(store: string, id: string, change: (current: T | undefined) => T | undefined) =>
+  withDeviceRecovery(() => updateOnce<T>(store, id, change));
 
 export const readWorkspaceRows = () =>
   read<WorkspaceRow[]>("workspaces", (store) => store.getAll());

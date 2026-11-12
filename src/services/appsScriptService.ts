@@ -11,6 +11,7 @@
 import { RestorationJobData } from '../types/jobData';
 import { DatabaseError, normalizeDatabaseUrl, requestDatabase } from './appsScriptTransport';
 import { APPS_SCRIPT_URL } from '../config/appsScript';
+import type { WorkspaceEntity, WorkspaceMutation } from '../types/jobWorkspace';
 export { DatabaseError } from './appsScriptTransport';
 
 /** Lightweight row used by the job library list (no full record). */
@@ -328,6 +329,11 @@ async function callApi<T>(action: string, payload: Record<string, unknown> = {},
 /** All document and intake operations use the same Apps Script session as job saves. */
 export async function callAuthenticatedAppsScript<T>(action: string, payload: Record<string, unknown> = {}, timeoutMs = 30000): Promise<T> {
   return callApi<T>(action, { ...payload, ...await acquireAuthContext() }, timeoutMs);
+}
+
+/** Replay with the account credentials captured when its owned outbox was read. */
+export function publishWorkspaceMutation(auth: AuthContext, mutation: WorkspaceMutation): Promise<WorkspaceEntity> {
+  return callApi<WorkspaceEntity>('mutateJobWorkspace', { ...mutation, ...auth });
 }
 
 /** Unauthenticated liveness check. */

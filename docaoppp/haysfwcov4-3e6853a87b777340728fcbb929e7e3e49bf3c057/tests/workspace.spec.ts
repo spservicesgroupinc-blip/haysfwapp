@@ -50,6 +50,51 @@ async function openJob(page: Page, workspace: Workspace) {
   await expect(page.getByLabel('Customer name', { exact: false })).toHaveValue(workspace.record.customer.customerName);
 }
 
+test('workspace device storage retries a transient browser internal error', async ({ page }) => {
+  await sandbox(page, [job()]);
+  await page.addInitScript(() => {
+    const original = indexedDB.open.bind(indexedDB);
+    let failed = false;
+    indexedDB.open = (name, version) => {
+      if (name === 'hays-job-workspaces-v1' && !failed) {
+        failed = true;
+        const request: any = { error: new DOMException('Internal error.', 'UnknownError') };
+        queueMicrotask(() => request.onerror?.());
+        return request;
+      }
+      return original(name, version);
+    };
+  });
+  await page.goto('/#/workspaces');
+  await expect(page.getByRole('heading', { name: 'Jobs & Documents', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry device storage', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Workspace Customer', { exact: true }).first()).toBeVisible();
+});
+
+test('workspace device storage failure gives a working recovery action', async ({ page }) => {
+  await sandbox(page, [job()]);
+  await page.addInitScript(() => {
+    const original = indexedDB.open.bind(indexedDB);
+    (window as any).__denyWorkspaceStorage = true;
+    indexedDB.open = (name, version) => {
+      if (name === 'hays-job-workspaces-v1' && (window as any).__denyWorkspaceStorage) {
+        const request: any = { error: new DOMException('Internal error.', 'UnknownError') };
+        queueMicrotask(() => request.onerror?.());
+        return request;
+      }
+      return original(name, version);
+    };
+  });
+  await page.goto('/#/workspaces');
+  const retry = page.getByRole('button', { name: 'Retry device storage', exact: true });
+  await expect(retry).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Saved jobs have not been cleared');
+  await page.evaluate(() => { (window as any).__denyWorkspaceStorage = false; });
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(page.getByText('Workspace Customer', { exact: true }).first()).toBeVisible();
+});
+
 async function sync(page: Page) {
   await page.getByRole('button', { name: 'Sync now', exact: true }).click();
   await expect(page.locator('.workspace-sync')).toContainText('Saved to shared workspace');
@@ -89,6 +134,7 @@ test('a new job saves exact financial details and survives reload', async ({ pag
   expect(saved).toHaveLength(1);
   expect(saved[0]).toMatchObject({ originalContract: '1000.01', previousChanges: '-20.05', record: { financials: { totalApprovedRcv: 1200.02 } } });
   await page.reload();
+  await page.getByRole('button', { name: 'Job Details', exact: true }).click();
   await expect(page.getByLabel('Customer name', { exact: false })).toHaveValue('Created Customer');
   await page.locator('summary').filter({ hasText: /^Financials$/ }).click();
   await expect(page.getByLabel('Original contract amount')).toHaveValue('1000.01');

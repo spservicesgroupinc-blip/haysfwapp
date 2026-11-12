@@ -17,6 +17,7 @@ export function ChangeOrders({ entities, canEdit, busy, save, job, online, pendi
   const [original, setOriginal] = useState('');
   const [opening, setOpening] = useState('0');
   const [reason, setReason] = useState('');
+  const [reviewRevision, setReviewRevision] = useState(0);
   const [selected, setSelected] = useState<WorkspaceEntity | null>(null);
   const [draft, setDraft] = useState<Record<string, any> | null>(null);
   const [voidReason, setVoidReason] = useState('');
@@ -25,6 +26,7 @@ export function ChangeOrders({ entities, canEdit, busy, save, job, online, pendi
   const legacy = job.changeOrder;
   const hasLegacy = !!legacy.scopeDescription || (typeof legacy.changeAmount === 'number' && legacy.changeAmount !== 0);
   function openReview() {
+    setReviewRevision(contract?.revision ?? 0);
     setOriginal(String(contract ? contract.data.originalCents / 100 : typeof legacy.originalContractSum === 'number' ? legacy.originalContractSum : job.financials.totalApprovedRcv));
     setOpening(String(contract ? contract.data.openingCents / 100 : typeof legacy.netPreviousChanges === 'number' ? legacy.netPreviousChanges : 0));
     setReason(''); setReview(true);
@@ -59,7 +61,7 @@ export function ChangeOrders({ entities, canEdit, busy, save, job, online, pendi
     </div>
     {review && <form className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4" onSubmit={async e => {
       e.preventDefault(); setError('');
-      try { if (await save('contract', 'contract', { originalCents: moneyToCents(original), openingCents: moneyToCents(opening), reason, reviewed: true }, contract?.revision ?? 0)) setReview(false); }
+      try { if (await save('contract', 'contract', { originalCents: moneyToCents(original), openingCents: moneyToCents(opening), reason, reviewed: true }, reviewRevision)) setReview(false); }
       catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     }}>
       <h3 className="font-semibold text-slate-900">Confirm the contract opening balance</h3><p className="text-sm text-slate-700">Use the original signed contract and approved historical changes. The opening adjustment must exclude any order entered in this ledger, including the legacy order if you import it.</p>
@@ -71,6 +73,13 @@ export function ChangeOrders({ entities, canEdit, busy, save, job, online, pendi
     {hasLegacy && !orders.some(e => e.id === 'legacy-change-order') && <div className="rounded-xl border border-amber-200 bg-white p-4 space-y-3"><p className="text-sm text-slate-700">The original job form contains an unreviewed change order: <strong>{legacy.changeOrderNumber}</strong>. Import it as a draft to review its approval, or keep it as a legacy document.</p>
       <div className="flex flex-wrap gap-2"><button className={buttonClass} onClick={() => preview(DOC.changeOrder, job)}>Preview legacy PDF</button>{canEdit && <button className={buttonClass} disabled={busy} onClick={() => void save('changeOrder', 'legacy-change-order', { number: legacy.changeOrderNumber || 'CO-LEGACY', date: legacy.changeOrderDate,
         scopeDescription: legacy.scopeDescription || 'Imported legacy change — review scope', isInsuranceRelated: legacy.isInsuranceRelated, amountCents: Math.round(Number(legacy.changeAmount || 0) * 100), changeType: legacy.changeType, addedDays: Number(legacy.addedDays || 0), status: 'Draft' }, 0)}>Import legacy order as draft</button>}</div></div>}
+    {!!job.changeOrderHistory?.length && <section aria-label="Legacy order review" className="rounded-xl border border-amber-200 bg-white p-4 space-y-3">
+      <h3 className="font-semibold text-slate-900">Legacy recorded orders</h3><p className="text-sm text-slate-600">These earlier orders keep their original PDFs. Review their approval before including them in the new ledger. Exclude any imported amounts from the approved opening adjustment.</p>
+      {job.changeOrderHistory.map(order => <div key={order.id} className="border-t border-slate-100 pt-3 space-y-2"><p className="text-sm font-semibold">{order.changeOrderNumber} · {order.changeOrderDate}</p><p className="whitespace-pre-wrap break-words text-sm text-slate-600">{order.scopeDescription}</p><div className="flex flex-wrap gap-2"><button className={buttonClass} onClick={() => preview(DOC.changeOrder, { ...job, changeOrder: order, changeOrderHistory: [] })}>Preview legacy {order.changeOrderNumber}</button>
+        {canEdit && !orders.some(e => e.id === `legacy-${order.id}`) && <button disabled={busy} className={buttonClass} onClick={() => void save('changeOrder', `legacy-${order.id}`, { number: order.changeOrderNumber, date: order.changeOrderDate,
+          scopeDescription: order.scopeDescription, isInsuranceRelated: order.isInsuranceRelated, amountCents: Math.round(Math.abs(Number(order.changeAmount || 0)) * 100), changeType: order.changeType, addedDays: Number(order.addedDays || 0), status: 'Draft' }, 0)}>Import {order.changeOrderNumber} as draft</button>}
+      </div></div>)}
+    </section>}
     {draft && pdfJob && <div className="space-y-3">
       <div className="flex flex-wrap gap-3 items-center"><h3 className="font-semibold text-slate-900">{selected ? draft.number : 'New change order'}</h3><Badge>{draft.status}</Badge><button className={buttonClass} onClick={() => setDraft(null)}>Close change order</button></div>
       <fieldset disabled={!canEdit || !!frozen || busy} className="min-w-0">

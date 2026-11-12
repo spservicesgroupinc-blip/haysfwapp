@@ -101,7 +101,7 @@ var PROP = {
 };
 
 // Visible in /exec health checks so a saved file cannot be mistaken for a deployed version.
-var BACKEND_VERSION = '2026-11-10-openrouter-3';
+var BACKEND_VERSION = '2026-11-12-workspace-1';
 var INTAKE_MODELS = ['google/gemma-4-31b-it:free', 'dots-studio/dots-3-note-preview:free'];
 
 var DEFAULTS = {
@@ -2001,6 +2001,9 @@ function mutateJobWorkspace_(user, payload) {
         d.status = 'Voided';
         d.voidReason = workspaceText_(input.voidReason, 1000, 'Void reason', true);
         d.voidedBy = user.email; d.voidedAt = now;
+        var activeContract = entities.filter(function (e) { return e.kind === 'contract'; })[0];
+        var remainingChanges = entities.filter(function (e) { return e.kind === 'changeOrder' && e.id !== id && e.data.status === 'Approved'; }).reduce(function (sum, e) { return sum + workspaceDelta_(e.data); }, 0);
+        if (activeContract && activeContract.data.originalCents + activeContract.data.openingCents + remainingChanges < 0) throw appError_('bad_request', 'Voiding this order would make the contract total negative. Review the related adjustments first.');
       } else {
         d = { number: workspaceText_(input.number, 40, 'Change order number', true), date: workspaceDate_(input.date, true),
           scopeDescription: workspaceText_(input.scopeDescription, 6000, 'Scope', true), isInsuranceRelated: input.isInsuranceRelated === true,

@@ -8,7 +8,7 @@ function mutateJobWorkspace_(user, payload) {
     var kind = workspaceChoice_(payload.kind, Object.keys(WORKSPACE_SHEETS), 'record type');
     if (!Number.isInteger(payload.expectedRevision) || payload.expectedRevision < 0) throw appError_('bad_request', 'Invalid revision.');
     getJob_(user, recordId);
-    var request = JSON.stringify({ actor: user.email, recordId: recordId, id: id, kind: kind, revision: payload.expectedRevision, data: payload.data });
+    var request = JSON.stringify({ actor: user.email, recordId: recordId, id: id, kind: kind, revision: payload.expectedRevision, financialRevision: payload.financialRevision, data: payload.data });
     if (request.length > 15000) throw appError_('bad_request', 'Workspace entry is too large.');
     var table = workspaceRows_(kind, true);
     var replay = table.rows.filter(function (row) { return String(row[3]) === operationId; })[0];
@@ -20,6 +20,8 @@ function mutateJobWorkspace_(user, payload) {
     var existing = entities.filter(function (e) { return e.kind === kind && e.id === id; })[0];
     if ((existing ? existing.revision : 0) !== payload.expectedRevision) throw appError_('conflict', 'This entry changed on another device. Review the latest version before saving.');
     var input = payload.data || {};
+    var financial = kind === 'contract' || (kind === 'changeOrder' && ['Approved', 'Voided'].indexOf(input.status) !== -1);
+    if (financial && payload.financialRevision !== workspaceFinancialRevision_(entities)) throw appError_('conflict', 'The contract position changed on another device. Review the latest totals before confirming this decision.');
     var d;
     var now = new Date().toISOString();
     if (kind === 'workItem') {
@@ -39,6 +41,8 @@ function mutateJobWorkspace_(user, payload) {
       if (id !== 'contract') throw appError_('bad_request', 'Invalid contract settings identifier.');
       d = { originalCents: workspaceMoney_(input.originalCents, false), openingCents: workspaceMoney_(input.openingCents, true), reviewed: true,
         reason: workspaceText_(input.reason, 1000, 'Review note', !!existing), reviewedBy: user.email, reviewedAt: now };
+      var netApproved = entities.filter(function (e) { return e.kind === 'changeOrder' && e.data.status === 'Approved'; }).reduce(function (sum, e) { return sum + workspaceDelta_(e.data); }, 0);
+      if (d.originalCents + d.openingCents + netApproved < 0) throw appError_('bad_request', 'The current contract total cannot be negative.');
     } else {
       if (existing && ['Approved', 'Voided'].indexOf(existing.data.status) !== -1) {
         if (existing.data.status === 'Voided' || input.status !== 'Voided') throw appError_('bad_request', 'Approved and voided orders are read-only. Void an approved order and create a replacement.');
@@ -47,6 +51,9 @@ function mutateJobWorkspace_(user, payload) {
         d.status = 'Voided';
         d.voidReason = workspaceText_(input.voidReason, 1000, 'Void reason', true);
         d.voidedBy = user.email; d.voidedAt = now;
+        var activeContract = entities.filter(function (e) { return e.kind === 'contract'; })[0];
+        var remainingChanges = entities.filter(function (e) { return e.kind === 'changeOrder' && e.id !== id && e.data.status === 'Approved'; }).reduce(function (sum, e) { return sum + workspaceDelta_(e.data); }, 0);
+        if (activeContract && activeContract.data.originalCents + activeContract.data.openingCents + remainingChanges < 0) throw appError_('bad_request', 'Voiding this order would make the contract total negative. Review the related adjustments first.');
       } else {
         d = { number: workspaceText_(input.number, 40, 'Change order number', true), date: workspaceDate_(input.date, true),
           scopeDescription: workspaceText_(input.scopeDescription, 6000, 'Scope', true), isInsuranceRelated: input.isInsuranceRelated === true,
@@ -60,6 +67,7 @@ function mutateJobWorkspace_(user, payload) {
           d.originalCents = contract.data.originalCents;
           d.previousCents = contract.data.openingCents + entities.filter(function (e) { return e.kind === 'changeOrder' && e.data.status === 'Approved'; }).reduce(function (sum, e) { return sum + workspaceDelta_(e.data); }, 0);
           d.approvedAt = now; d.approvedBy = user.email;
+          if (!Number.isSafeInteger(d.originalCents + d.previousCents + workspaceDelta_(d)) || d.originalCents + d.previousCents + workspaceDelta_(d) < 0) throw appError_('bad_request', 'The resulting contract total must be a valid non-negative amount.');
         }
       }
     }

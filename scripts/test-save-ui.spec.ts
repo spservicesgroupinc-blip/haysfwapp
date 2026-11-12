@@ -443,6 +443,8 @@ test('jobs can be searched and sorted, and Continue editing keeps current draft 
   await page.locator('#customer-mainPhone').fill('260-555-0199');
   await page.getByRole('button', { name: 'Open saved jobs', exact: true }).click();
   await library.getByRole('button', { name: /^Continue editing/ }).click();
+  await expect(page.getByRole('heading', { name: 'Recovered customer', exact: true })).toBeVisible();
+  await navigate(page, 'customer');
   await expect(page.locator('#customer-mainPhone')).toHaveValue('260-555-0199');
   expect(loads).toBe(0);
 });

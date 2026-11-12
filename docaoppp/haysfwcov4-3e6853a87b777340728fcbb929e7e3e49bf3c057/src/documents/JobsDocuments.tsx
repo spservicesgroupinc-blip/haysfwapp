@@ -204,7 +204,7 @@ export default function JobsDocuments({
                 .catch((value) => setError(String(value)))
             }
           >
-            Retry connection
+            {error.toLowerCase().includes('device storage') ? 'Retry device storage' : 'Retry connection'}
           </button>
         </div>
       )}

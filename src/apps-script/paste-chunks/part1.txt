@@ -101,7 +101,7 @@ var PROP = {
 };
 
 // Visible in /exec health checks so a saved file cannot be mistaken for a deployed version.
-var BACKEND_VERSION = '2026-11-10-openrouter-3';
+var BACKEND_VERSION = '2026-11-12-workspace-1';
 var INTAKE_MODELS = ['google/gemma-4-31b-it:free', 'dots-studio/dots-3-note-preview:free'];
 
 var DEFAULTS = {

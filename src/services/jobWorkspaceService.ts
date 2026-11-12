@@ -1,4 +1,4 @@
-import { callAuthenticatedAppsScript, getCurrentUser, isDeveloperBypassEnabled, DatabaseError } from './appsScriptService';
+import { callAuthenticatedAppsScript, getCurrentUser, isDeveloperBypassEnabled, publishWorkspaceMutation, DatabaseError, type AuthContext } from './appsScriptService';
 import { acknowledgeWorkspace, cacheWorkspace, getOutboxOps, getWorkspaceCache, queueWorkspaceMutation, reconcileWorkspace, type OutboxOp } from './localDb';
 import type { WorkspaceEntity, WorkspaceMutation, WorkspaceSnapshot, StaffMember } from '../types/jobWorkspace';
 
@@ -52,9 +52,10 @@ export async function saveWorkspaceMutation(mutation: WorkspaceMutation): Promis
   await queueWorkspaceMutation(workspaceOwner(), mutation);
   notifyWorkspace();
 }
-export async function pushWorkspaceOperation(op: OutboxOp): Promise<void> {
-  const result = await callAuthenticatedAppsScript<WorkspaceEntity>('mutateJobWorkspace', { ...op.mutation });
-  if (!result?.id || !Number.isInteger(result.revision)) throw new DatabaseError('The dashboard write was not acknowledged.', 'bad_response');
+export async function pushWorkspaceOperation(op: OutboxOp, auth: AuthContext): Promise<void> {
+  const mutation = op.mutation!;
+  const result = await publishWorkspaceMutation(auth, mutation);
+  if (result?.id !== mutation.id || result.recordId !== mutation.recordId || result.kind !== mutation.kind || result.revision !== mutation.expectedRevision + 1 || !result.data || typeof result.data !== 'object') throw new DatabaseError('The dashboard write was not acknowledged.', 'bad_response');
   await acknowledgeWorkspace(op, result);
   notifyWorkspace();
 }

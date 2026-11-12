@@ -34,6 +34,7 @@ test('approved PDF uses its frozen contract snapshot', () => {
   assert.equal(job.changeOrder.originalContractSum, 10000);
   assert.equal(job.changeOrder.netPreviousChanges, 500);
   assert.equal(job.changeOrder.changeAmount, 250);
+  assert.deepEqual(job.changeOrderHistory, []);
 });
 
 test('overdue uses local calendar date and excludes closed work', () => {
