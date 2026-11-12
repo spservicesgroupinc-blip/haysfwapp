@@ -262,3 +262,7 @@ function workspaceDate_(value, required) {
 function workspaceDelta_(d) {
   return d.changeType === 'increase' ? d.amountCents : d.changeType === 'decrease' ? -d.amountCents : 0;
 }
+function workspaceFinancialRevision_(entities) {
+  return entities.filter(function (e) { return e.kind === 'contract' || (e.kind === 'changeOrder' && e.data.status === 'Approved'); })
+    .map(function (e) { return e.kind + ':' + e.id + ':' + e.revision; }).sort().join('|');
+}

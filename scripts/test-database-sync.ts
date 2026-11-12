@@ -370,3 +370,12 @@ test('dashboard pending work and cached staff are isolated by account', async t 
   assert.equal(ops.length, 1);
   assert.equal(ops[0].owner, owner);
 });
+
+test('an unrelated dashboard acknowledgement cannot remove the pending operation', async t => {
+  const engine = setup(t, body => reply({ ...body, id: 'different-item', revision: 1, data: body.data }));
+  await engine.workspace.saveWorkspaceMutation({ operationId: 'guarded-ack', recordId: job.recordId, kind: 'workItem', id: 'task', expectedRevision: 0, data: { title: 'Keep local work' } });
+  await engine.flushOutboxNow();
+  const pending = await engine.storage.getOutboxOps();
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].errorCode, 'bad_response');
+});

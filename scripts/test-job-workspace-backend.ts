@@ -72,3 +72,31 @@ test('pagination returns independent latest entities and complete unique activit
   assert.equal(page.totalActivity, 3);
   assert.equal(context.getJobWorkspace_(user, { recordId: 'job', page: 2, pageSize: 1 }).entities.length, 1);
 });
+
+test('a changed contract position blocks approval even when the order itself is unchanged', () => {
+  const { context, user, mutate } = setup();
+  mutate('contract', 'contract', { originalCents: 1000000, openingCents: 0, reviewed: true });
+  mutate('changeOrder', 'co-1', change);
+  const stalePosition = context.workspaceFinancialRevision_(context.workspaceEntities_('job'));
+  mutate('contract', 'contract', { originalCents: 1200000, openingCents: 0, reviewed: true, reason: 'Correct original contract' }, 1);
+  assert.throws(() => context.mutateJobWorkspace_(user, { operationId: 'stale-approval', recordId: 'job', kind: 'changeOrder', id: 'co-1', expectedRevision: 1,
+    financialRevision: stalePosition, data: { ...change, status: 'Approved' } }), /contract position changed/);
+});
+
+test('approved decisions replay safely after a lost response and cannot be silently revised', () => {
+  const { context, user, mutate } = setup();
+  mutate('contract', 'contract', { originalCents: 1000000, openingCents: 0, reviewed: true });
+  const request = { operationId: 'approve-once', recordId: 'job', kind: 'changeOrder', id: 'co-1', expectedRevision: 0,
+    financialRevision: context.workspaceFinancialRevision_(context.workspaceEntities_('job')), data: { ...change, status: 'Approved' } };
+  const approved = context.mutateJobWorkspace_(user, request);
+  assert.equal(context.mutateJobWorkspace_(user, request).revision, approved.revision);
+  assert.equal(context.workspaceEntities_('job').filter((e: any) => e.kind === 'changeOrder').length, 1);
+});
+
+test('voiding an earlier increase cannot leave later approved credits below zero', () => {
+  const { mutate } = setup();
+  mutate('contract', 'contract', { originalCents: 0, openingCents: 0, reviewed: true });
+  const first = mutate('changeOrder', 'increase', { ...change, status: 'Approved' });
+  mutate('changeOrder', 'credit', { ...change, number: 'CO-02', changeType: 'decrease', status: 'Approved' });
+  assert.throws(() => mutate('changeOrder', 'increase', { ...first.data, status: 'Voided', voidReason: 'Incorrect order' }, 1), /negative/);
+});

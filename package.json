@@ -29,6 +29,7 @@
     "spans:test": "tsx scripts/test-pdf-spans.ts",
     "pdf:checklist:test": "tsx --test scripts/test-production-checklist.ts",
     "changes:test": "tsx --test scripts/test-change-orders.ts",
+    "workspace:test": "tsx --test scripts/test-job-workspace.ts scripts/test-job-workspace-backend.ts scripts/test-workspace-storage-recovery.ts",
     "verify": "npm run lint && npm run apps:ascii && npm run apps:paste && npm run apps:test && npm run apps:register && npm run parser:test && npm run build"
   },
   "dependencies": {

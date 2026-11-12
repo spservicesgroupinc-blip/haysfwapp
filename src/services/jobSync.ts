@@ -525,8 +525,10 @@ async function doFlush(): Promise<void> {
   // publishes - or is credited with - somebody else's edit.
   const ops = (await getOutboxOps()).filter((op) => outboxOpIsMine(op, owner))
     .sort((a, b) => Number(a.type === 'draft') - Number(b.type === 'draft') || (a.id ?? 0) - (b.id ?? 0));
+  // Dashboard operations can be queued independently of a whole-job save.
+  // Publish their count before a network failure can exit the flush early.
+  await refreshPendingState();
   if (ops.length === 0) {
-    await refreshPendingState();
     return;
   }
 
@@ -559,12 +561,12 @@ async function doFlush(): Promise<void> {
       if (currentOwner() !== owner || !state.online) return;
       // A replaced draft has a new operation ID; do not send the stale snapshot.
       if (!(await getOutboxOps()).some(item => item.id === op.id)) continue;
-      if (op.type === 'workspace' && ops.some(earlier => earlier.type === 'workspace' && earlier.id! <= op.id! && earlier.mutation?.id === op.mutation?.id && earlier.recordId === op.recordId && earlier.errorCode)) { hadFailure = true; continue; }
+      if (op.type === 'workspace' && ops.some(earlier => earlier.type === 'workspace' && earlier.id! <= op.id! && earlier.mutation?.id === op.mutation?.id && earlier.recordId === op.recordId && ['conflict', 'bad_request'].includes(earlier.errorCode ?? ''))) { hadFailure = true; continue; }
       const mirror = await getMirrorJob(op.recordId);
       try {
         let published = true;
         if (op.type === 'workspace' && op.mutation) {
-          await pushWorkspaceOperation(op);
+          await pushWorkspaceOperation(op, auth);
         } else if (op.type === 'draft' && op.draft) {
           published = await pushDraft(auth, op);
         } else if (op.type === 'save' && op.job) {

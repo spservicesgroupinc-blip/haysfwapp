@@ -50,7 +50,7 @@ test('the complete Code.gs identifies the deployed AI version without exposing i
   const env = backend();
   const ping = env.sandbox.doGet({ parameter: {} });
   assert.equal(ping.ok, true);
-  assert.equal(ping.data.backendVersion, '2026-11-10-openrouter-3');
+  assert.equal(ping.data.backendVersion, '2026-11-12-workspace-1');
   assert.ok(ping.data.capabilities.includes('analyzeIntake'));
   assert.equal(ping.data.aiConfigured, true);
   assert.doesNotMatch(JSON.stringify(ping), /test-key|Bearer/);

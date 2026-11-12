@@ -179,6 +179,10 @@ connection returns (last write wins; a notice appears when the server copy moved
 
 ## Offline behaviour (both platforms)
 
+Customer dashboards, assigned tasks/issues, approval-based contract totals and
+change-order history are described in [Customer job workspace](docs/customer-job-workspace.md).
+Run `npm run workspace:test` for the workspace and storage-recovery checks.
+
 - The saved-jobs list paints instantly from the local mirror, then refreshes from the server.
 - Saves/deletes made offline are queued (amber "PENDING SYNC" badge); the status card in the
   bottom-right shows the queue, a "Sync now" button, and reconnect notices.

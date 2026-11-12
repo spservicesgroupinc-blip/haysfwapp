@@ -117,7 +117,7 @@ serving a version without the `analyzeIntake` action. Replace the entire Code.gs
 save it, then choose **Deploy > Manage deployments > Edit (pencil) > Version:
 New version > Deploy** on the deployment whose URL the app uses. Saving the file
 alone does not update `/exec`. Keep the current URL. Opening `/exec` afterward
-must show `backendVersion: "2026-11-10-openrouter-3"`, `analyzeIntake` in
+must show `backendVersion: "2026-11-12-workspace-1"`, `analyzeIntake` and `jobWorkspace` in
 `capabilities`, and `aiConfigured: true`. If `aiConfigured` is false, set the
 `OPENROUTER_API_KEY` Script Property. The health check never displays the key.
 
